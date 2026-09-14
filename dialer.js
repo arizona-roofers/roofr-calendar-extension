@@ -894,6 +894,22 @@
     let skippedNonTest = 0;
     let skippedSource = 0;
     let skippedAttempts = 0;
+    let skippedResolvedDupe = 0;
+
+    // Same-day duplicate guard. A sync race can land the SAME lead on two rows
+    // with an identical receipt date. When a rep dispositions one copy
+    // terminally (Bad Leads / Lost / Booked), the other copy stays "Attempted"
+    // and keeps cycling, so the rep re-dials someone already resolved that day
+    // — Marta Garcia got two calls this way on 2026-09-14. Key on phone +
+    // receipt DAY, never phone alone: the same number legitimately comes back
+    // weeks later as a new inquiry and must still be dialable.
+    const resolvedSameDay = new Set();
+    for (const l of rows) {
+      const st = (l.status || "").trim().toLowerCase();
+      if (ALLOWED_STATUSES.has(st)) continue;          // open row — not a resolution
+      const key = dupeDayKey(l);
+      if (key) resolvedSameDay.add(key);
+    }
 
     // Collect all unique sources for the filter UI (excluding blocklisted ones)
     const sourcesInData = new Set();
@@ -941,6 +957,10 @@
 
       // Allowlist: only New / Attempted / Follow-Up / blank are dialable.
       if (!ALLOWED_STATUSES.has(statusLower)) continue;
+
+      // Duplicate of a lead already resolved on another row the same day.
+      const dupeKey = dupeDayKey(l);
+      if (dupeKey && resolvedSameDay.has(dupeKey)) { skippedResolvedDupe++; continue; }
 
       // Source filter — skip if source doesn't match active filters
       if (filterSources.size > 0) {
@@ -1015,6 +1035,7 @@
       if (skippedScheduled > 0) parts.push(`${skippedScheduled} scheduled for a later day`);
       if (skippedSource > 0) parts.push(`${skippedSource} filtered by source`);
       if (skippedAttempts > 0) parts.push(`${skippedAttempts} filtered by attempts`);
+      if (skippedResolvedDupe > 0) parts.push(`${skippedResolvedDupe} duplicate of a lead resolved today`);
       if (parts.length > 0) log(parts.join(", "), "info", "queue");
     }
     updateFilterStats(skippedSource, skippedAttempts, skipped3hr);
@@ -1062,6 +1083,16 @@
 
   // Numeric ordinal (YYYYMMDD) for an AZ date string, for before/after
   // comparisons. null if unparseable.
+  // "phone|receipt day" identity for a sheet row — the key the same-day
+  // duplicate guard uses. Column C is written as "9/14/2026, 8:29 AM", so the
+  // day is everything before the comma; no Date parsing, no timezone drift.
+  function dupeDayKey(l) {
+    if (!l) return "";
+    const ph = l.phone10 || (l.phone || "").replace(/\D/g, "").slice(-10);
+    const day = String(l.date || "").split(",")[0].trim();
+    return (ph.length === 10 && day) ? `${ph}|${day}` : "";
+  }
+
   function azDateOrdinal(s) {
     const p = azDatePart(s);
     if (!p) return null;
