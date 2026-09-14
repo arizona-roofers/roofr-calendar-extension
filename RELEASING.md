@@ -46,20 +46,23 @@ npm run ship -- major   # 2.1.2 -> 3.0.0   (use when permissions change)
 Check the Actions log. The build self-aborts (instead of shipping something broken) if the signed ID doesn't match `fkldnf` or the signing secret is missing.
 
 
-## 2026-09-14: GitHub is no longer the update host
+## 2026-09-14: repo moved to the `arizona-roofers` org
 
-The repo is private under the `arizona-roofers` org, so Chrome cannot fetch
-`raw.githubusercontent.com/.../updates.xml` or release `.crx` assets (404), and the
-org disables workflow write permissions, so CI cannot create releases either.
+The repo was transferred to the org and briefly PRIVATE, which broke Chrome auto-update
+fleet-wide (raw.githubusercontent + release URLs 404 without a login). It is PUBLIC again
+(2026-09-14) and must stay public: Chrome fetches `updates.xml` and the `.crx` anonymously.
+GitHub redirects the old `atravisjones/...` URLs, so the Workspace force-install policy URL
+still works unchanged. Canonical URLs are now:
 
-Chrome now updates from the tech scheduler's static host:
+- `https://raw.githubusercontent.com/arizona-roofers/roofr-calendar-extension/main/updates.xml`
+- `https://github.com/arizona-roofers/roofr-calendar-extension/releases/download/vX.Y.Z/roofr-calendar-scraper.crx`
 
-- `https://az-roofers-tech-scheduler.vercel.app/ext/updates.xml`
-- `https://az-roofers-tech-scheduler.vercel.app/ext/roofr-calendar-scraper.crx`
+CI releases need the org setting **Settings → Actions → General → Workflow permissions =
+Read and write** (the repo-level setting is locked by the org). Until that is on, the
+"Create GitHub Release" step 403s and the release must be published manually:
+`git worktree add <tmp> vX.Y.Z` → copy the fkldnf `extension.pem` in → `npm ci` →
+`node scripts/build-crx.cjs` → `scripts/get-crx-id.cjs` must print
+`fkldnfkfppeicfcgmlnpknfkmnfkaabo` → zip the release.yml file list →
+`gh release create vX.Y.Z --latest <zip> releases/roofr-calendar-scraper.crx`.
 
-Release procedure: `npm run ship` (bump + tag + push) → build the crx from the tag in a
-clean worktree with the fkldnf `extension.pem` (`node scripts/build-crx.cjs`, verify
-`scripts/get-crx-id.cjs` prints `fkldnfkfppeicfcgmlnpknfkmnfkaabo`) → copy
-`releases/roofr-calendar-scraper.crx` into `arizona-roofers-rep-schedler/public/ext/`,
-bump `version=` in that repo's `public/ext/updates.xml` → `vercel --prod --yes` there.
-The Workspace force-install policy must point at the scheduler `updates.xml`.
+Backup host (same files, kept in sync manually): `https://az-roofers-tech-scheduler.vercel.app/ext/`.
