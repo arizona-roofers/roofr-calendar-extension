@@ -2954,6 +2954,90 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
     }
 
+    function emptyWeeklyAvailability() {
+        return { PHX: null, SOUTH: null, NORTH: null, COMM: null, ALL: null };
+    }
+
+    function isFutureWeekSunday(sISO) {
+        return sISO > weekSundayKey(phoenixTodayISO());
+    }
+
+    function hasRegionalAvailability(availability) {
+        return ['PHX', 'NORTH', 'SOUTH', 'COMM'].some(region => availability?.[region] !== null);
+    }
+
+    async function fetchAvailabilityCapacityWeek(mondayISO) {
+        const url = `https://az-roofers-tech-scheduler.vercel.app/api/availability-capacity?${new URLSearchParams({ monday: mondayISO })}`;
+        try {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (!Array.isArray(data?.days)) throw new Error('invalid payload');
+            return data.days;
+        } catch (e) {
+            addLog(`Availability capacity endpoint failed for ${mondayISO}: ${e.message}`, 'WARN');
+            return null;
+        }
+    }
+
+    function mapAvailabilityCapacityDays(sISO, primaryDays, secondaryDays) {
+        const regions = ['PHX', 'NORTH', 'SOUTH', 'COMM'];
+        const avail = { PHX: {}, SOUTH: {}, NORTH: {}, COMM: {}, ALL: null };
+        const primaryDates = Array.from({ length: 6 }, (_, i) => addDaysISO(sISO, i + 1));
+        const primaryByDate = new Map(primaryDays.map(day => [day?.date, day]));
+        const secondaryDay = secondaryDays?.find(day => day?.date === sISO);
+
+        if (!primaryDates.every(date => primaryByDate.has(date))) return null;
+        if (secondaryDays && !secondaryDay) {
+            addLog(`Availability capacity endpoint missing Sunday ${sISO}; using zero capacity for index 6`, 'WARN');
+        }
+
+        const addDay = (day, index) => {
+            if (!day || typeof day.regions !== 'object' || !day.regions) return false;
+            for (const region of regions) {
+                const slots = day.regions[region];
+                if (!slots || typeof slots !== 'object') return false;
+                for (const [slot, rawCount] of Object.entries(slots)) {
+                    const match = /^s(\d+)$/i.exec(slot);
+                    if (!match) continue;
+                    const blockKey = `B${match[1]}`;
+                    if (!avail[region][blockKey]) avail[region][blockKey] = Array(7).fill(0);
+                    const count = Number(rawCount);
+                    avail[region][blockKey][index] = Number.isFinite(count) && count >= 0 ? count : 0;
+                }
+            }
+            return true;
+        };
+
+        for (let i = 0; i < primaryDates.length; i++) {
+            if (!addDay(primaryByDate.get(primaryDates[i]), i)) return null;
+        }
+        if (secondaryDay && !addDay(secondaryDay, 6)) return null;
+        for (const region of regions) {
+            if (Object.keys(avail[region]).length === 0) avail[region] = null;
+        }
+        avail.ALL = CONFIG.sumMaps(CONFIG.sumMaps(avail.PHX, avail.NORTH), avail.SOUTH);
+        return avail;
+    }
+
+    async function fetchAvailabilityCapacityForSunday(sISO) {
+        const primaryMonday = addDaysISO(sISO, 1);
+        const secondaryMonday = addDaysISO(sISO, -6);
+        const [primaryDays, secondaryDays] = await Promise.all([
+            fetchAvailabilityCapacityWeek(primaryMonday),
+            fetchAvailabilityCapacityWeek(secondaryMonday)
+        ]);
+        if (!primaryDays) return null;
+        if (!secondaryDays) {
+            addLog(`Availability capacity endpoint failed for Sunday ${sISO}; using zero capacity for index 6`, 'WARN');
+        }
+        const avail = mapAvailabilityCapacityDays(sISO, primaryDays, secondaryDays);
+        if (!avail) {
+            addLog(`Availability capacity endpoint returned incomplete data for ${sISO}`, 'WARN');
+        }
+        return avail;
+    }
+
     // Availability map for the week that dISO falls in. Falls back to the primary
     // week's data if that week wasn't fetched. This is what lets each day card
     // read ITS OWN week's capacity when the visible range spans several weeks.
@@ -2970,8 +3054,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // {PHX,NORTH,SOUTH,ALL} map without mutating state or alerting. Used to fetch
     // each additional visible week (see runScanFlow) so multi-week / agenda day
     // cards don't all inherit the first week's numbers.
-    async function computeAvailabilityForSunday(sISO) {
-        if (!sISO || !CONFIG.apiKey || !settings.NEXT_SHEET_ID) return null;
+    async function computeSheetAvailabilityForSunday(sISO) {
+        const avail = emptyWeeklyAvailability();
+        if (!sISO || !CONFIG.apiKey || !settings.NEXT_SHEET_ID) {
+            return { availability: avail, sheetDataFound: false };
+        }
         const sunDate = new Date(`${sISO}T12:00:00Z`);
         const monDate = new Date(sunDate);
         monDate.setUTCDate(sunDate.getUTCDate() + 1);
@@ -2983,8 +3070,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             fetchCapacitiesForTab(primaryTab),
             fetchCapacitiesForTab(secondaryTab)
         ]);
-        const avail = { PHX: null, SOUTH: null, NORTH: null, COMM: null, ALL: null };
-        if (!primaryData && !secondaryData) return avail;
+        const sheetDataFound = primaryData !== null || secondaryData !== null;
+        if (!sheetDataFound) return { availability: avail, sheetDataFound };
         // Storm tabs carry 5 blocks — teach CONFIG this week's block windows.
         // (CONFIG.registerWeekBlocks guarded: stale cached config.js must not throw.)
         if (CONFIG.registerWeekBlocks) {
@@ -3006,11 +3093,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         // ALL stays residential (PHX+NORTH+SOUTH); COMM is its own capacity pool.
         avail.ALL = CONFIG.sumMaps(CONFIG.sumMaps(avail.PHX, avail.NORTH), avail.SOUTH);
-        return avail;
+        return { availability: avail, sheetDataFound };
+    }
+
+    async function computeAvailabilityForSunday(sISO) {
+        if (!sISO) return null;
+        if (isFutureWeekSunday(sISO)) {
+            const endpointAvailability = await fetchAvailabilityCapacityForSunday(sISO);
+            if (endpointAvailability) {
+                addLog(`capacity ${sISO}: availability API (ON slots only)`);
+                return endpointAvailability;
+            }
+            const sheet = await computeSheetAvailabilityForSunday(sISO);
+            if (sheet.sheetDataFound) addLog(`capacity ${sISO}: Google Sheets`);
+            return sheet.availability;
+        }
+
+        const sheet = await computeSheetAvailabilityForSunday(sISO);
+        if (sheet.sheetDataFound) {
+            addLog(`capacity ${sISO}: Google Sheets`);
+            return sheet.availability;
+        }
+        const endpointAvailability = await fetchAvailabilityCapacityForSunday(sISO);
+        if (endpointAvailability) addLog(`capacity ${sISO}: availability API (ON slots only)`);
+        return endpointAvailability || sheet.availability;
     }
 
     async function fetchSheetCapacitiesForSunday(sISO) {
-        if (!sISO || !CONFIG.apiKey || !settings.NEXT_SHEET_ID) return;
+        if (!sISO) return;
         addLog('Fetching capacities...');
         const sunDate = new Date(`${sISO}T12:00:00Z`);
 
@@ -3019,56 +3129,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const monDate = new Date(sunDate);
         monDate.setUTCDate(sunDate.getUTCDate() + 1); // Monday after this Sunday
 
-        const [primaryTab, secondaryTab] = await Promise.all([
-            discoverWeeklyTabNameForDate(monDate),    // Tab for Mon-Sat (the week starting Monday)
-            discoverWeeklyTabNameForDate(sunDate)     // Tab for Sunday (the week containing this Sunday)
-        ]);
-        addLog(`Tabs found -> Mon-Sat: ${primaryTab || 'N/A'}, Sun: ${secondaryTab || 'N/A'}`);
-
-        // Fetch capacity data and day cutoffs in parallel
-        const [primaryData, secondaryData, dayCutoffs] = await Promise.all([
-            fetchCapacitiesForTab(primaryTab),
-            fetchCapacitiesForTab(secondaryTab),
+        const primaryTab = CONFIG.apiKey && settings.NEXT_SHEET_ID
+            ? await discoverWeeklyTabNameForDate(monDate)
+            : null;
+        const [availability, dayCutoffs] = await Promise.all([
+            computeAvailabilityForSunday(sISO),
             fetchDayCutoffs(primaryTab)
         ]);
 
         // Store cutoffs in state
         state.dayCutoffs = dayCutoffs;
-
-        if (!primaryData && !secondaryData) {
-            state.availability = { PHX: null, SOUTH: null, NORTH: null, COMM: null, ALL: null };
+        state.availability = availability || emptyWeeklyAvailability();
+        if (!hasRegionalAvailability(state.availability)) {
             applyRegionFilter();
-            alert("Could not find a valid weekly tab in Google Sheets for the selected week.");
-            return;
+            alert("Could not find availability data for the selected week (sheet tab missing and availability API unavailable).");
         }
-        // Storm tabs carry 5 blocks — teach CONFIG this week's block windows.
-        // (CONFIG.registerWeekBlocks guarded: stale cached config.js must not throw.)
-        if (CONFIG.registerWeekBlocks) {
-            if (primaryData?.__labels) CONFIG.registerWeekBlocks(CONFIG.weekMondayKey(monDate), primaryData.__labels);
-            if (secondaryData?.__labels) CONFIG.registerWeekBlocks(CONFIG.weekMondayKey(sunDate), secondaryData.__labels);
-            state.weekBlockDefs = { ...CONFIG.WEEK_BLOCK_DEFS };
-        }
-        const regions = ['PHX', 'NORTH', 'SOUTH', 'COMM'];
-        for (const region of regions) {
-            const pData = primaryData?.[region], sData = secondaryData?.[region];
-            if (!pData && !sData) { state.availability[region] = null; continue; }
-            const newAvail = {};
-            const keys = [...new Set([...Object.keys(pData || {}), ...Object.keys(sData || {})])].filter(k => /^B\d+$/.test(k));
-            for (const key of keys) {
-                // Availability array is Monday-first: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
-                // Mon-Sat (indexes 0-5) come from primaryTab (current week starting Monday)
-                // Sunday (index 6) comes from secondaryTab (previous week's Sunday)
-                newAvail[key] = [];
-                for (let i = 0; i < 6; i++) {
-                    newAvail[key][i] = pData?.[key]?.[i] ?? 0;  // Mon-Sat from current week's tab
-                }
-                newAvail[key][6] = sData?.[key]?.[6] ?? 0;  // Sunday from previous week's tab
-            }
-            state.availability[region] = newAvail;
-        }
-        // ALL stays residential (PHX+NORTH+SOUTH); COMM is its own capacity pool.
-        state.availability.ALL = CONFIG.sumMaps(CONFIG.sumMaps(state.availability.PHX, state.availability.NORTH), state.availability.SOUTH);
-        addLog("Successfully combined data from sheets.");
     }
 
     /* ========= Day rendering ========= */
