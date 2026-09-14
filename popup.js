@@ -1226,7 +1226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showReportsTab: false, // Hidden by default
         showMetricsTab: true,  // CSR bookings + calls ranking (2026-09-03)
         showAddrBanner: false, // blue address-verify bar the Reports chauffeur pins to the Roofr page (off by default 2026-09-03)
-        showTodoStrip: true,   // Queue-shortcut chips at the top of the panel
+        showTodoStrip: false,  // Queue-shortcut chips at the top of the panel (off by default 2026-09-14)
         showQuickNotes: true,
         showFindBar: true,
         // Footer tools
@@ -10767,6 +10767,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
+        // One-time migration: hide the to-do strip by default (Travis 2026-09-14).
+        // It shipped ON in v3.2.38, so every install that ever saved a setting has
+        // showTodoStrip:true baked into its local prefs blob — flipping the default
+        // alone would not hide it for anyone. Runs once; a later manual toggle sticks.
+        chrome.storage.local.get('todo_strip_default_off_v1', (result) => {
+            if (!result.todo_strip_default_off_v1) {
+                chrome.storage.sync.set({ show_todo_strip: false }, () => {
+                    chrome.storage.local.set({ todo_strip_default_off_v1: true });
+                    userPrefs.showTodoStrip = false;
+                    saveUserPrefs();
+                    if (settingShowTodoStrip) settingShowTodoStrip.checked = false;
+                    const stripEl = document.getElementById('todo-strip');
+                    if (stripEl) stripEl.style.display = 'none';
+                    console.log('[Popup] Migrated to-do strip: hidden by default');
+                });
+            }
+        });
+
         // Theme
         const themeName = userPrefs.theme || 'light';
         applyTheme(themeName);
@@ -10834,9 +10852,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (settingShowReports) settingShowReports.checked = userPrefs.showReportsTab;
         if (settingShowMetrics) settingShowMetrics.checked = userPrefs.showMetricsTab !== false;
         if (settingShowAddrBanner) settingShowAddrBanner.checked = userPrefs.showAddrBanner === true;
-        if (settingShowTodoStrip) settingShowTodoStrip.checked = userPrefs.showTodoStrip !== false;
+        if (settingShowTodoStrip) settingShowTodoStrip.checked = userPrefs.showTodoStrip === true;
         const todoStripEl = document.getElementById('todo-strip');
-        if (todoStripEl) todoStripEl.style.display = userPrefs.showTodoStrip === false ? 'none' : '';
+        if (todoStripEl) todoStripEl.style.display = userPrefs.showTodoStrip === true ? '' : 'none';
 
         // Sync with options page settings if available
         chrome.storage.sync.get([
@@ -10929,9 +10947,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (settingShowClipboard) settingShowClipboard.checked = userPrefs.showClipboardTab;
             if (settingShowReports) settingShowReports.checked = userPrefs.showReportsTab;
             if (settingShowMetrics) settingShowMetrics.checked = userPrefs.showMetricsTab !== false;
-            if (settingShowTodoStrip) settingShowTodoStrip.checked = userPrefs.showTodoStrip !== false;
+            if (settingShowTodoStrip) settingShowTodoStrip.checked = userPrefs.showTodoStrip === true;
             const todoStripSynced = document.getElementById('todo-strip');
-            if (todoStripSynced) todoStripSynced.style.display = userPrefs.showTodoStrip === false ? 'none' : '';
+            if (todoStripSynced) todoStripSynced.style.display = userPrefs.showTodoStrip === true ? '' : 'none';
 
             // Update tab visibility - tabs are visible by default, only hide if explicitly false
             const dialerTabBtn = document.querySelector('.nav-tab[data-target="sec-dialer"]');
