@@ -44,3 +44,22 @@ npm run ship -- major   # 2.1.2 -> 3.0.0   (use when permissions change)
 
 ## If a release fails
 Check the Actions log. The build self-aborts (instead of shipping something broken) if the signed ID doesn't match `fkldnf` or the signing secret is missing.
+
+
+## 2026-09-14: GitHub is no longer the update host
+
+The repo is private under the `arizona-roofers` org, so Chrome cannot fetch
+`raw.githubusercontent.com/.../updates.xml` or release `.crx` assets (404), and the
+org disables workflow write permissions, so CI cannot create releases either.
+
+Chrome now updates from the tech scheduler's static host:
+
+- `https://az-roofers-tech-scheduler.vercel.app/ext/updates.xml`
+- `https://az-roofers-tech-scheduler.vercel.app/ext/roofr-calendar-scraper.crx`
+
+Release procedure: `npm run ship` (bump + tag + push) → build the crx from the tag in a
+clean worktree with the fkldnf `extension.pem` (`node scripts/build-crx.cjs`, verify
+`scripts/get-crx-id.cjs` prints `fkldnfkfppeicfcgmlnpknfkmnfkaabo`) → copy
+`releases/roofr-calendar-scraper.crx` into `arizona-roofers-rep-schedler/public/ext/`,
+bump `version=` in that repo's `public/ext/updates.xml` → `vercel --prod --yes` there.
+The Workspace force-install policy must point at the scheduler `updates.xml`.
