@@ -46,24 +46,24 @@ npm run ship -- major   # 2.1.2 -> 3.0.0   (use when permissions change)
 Check the Actions log. The build self-aborts (instead of shipping something broken) if the signed ID doesn't match `fkldnf` or the signing secret is missing.
 
 
-## 2026-09-14: repo is PRIVATE under the `arizona-roofers` org — GitHub is NOT the update host
+## 2026-09-14: repo lives in the `arizona-roofers` org and MUST stay PUBLIC
 
-Chrome fetches `updates.xml` and the `.crx` anonymously, and a private repo returns 404 to
-it (that silently froze every managed machine on an old version after the transfer).
-Travis wants the repo private, so the two update files are served from the tech scheduler
-site instead (public static files, nothing else exposed):
+Chrome fetches `updates.xml` and the `.crx` anonymously. The repo was briefly private after
+the org transfer and that silently froze every managed machine (404s). Travis chose to keep
+GitHub as the update host, so the repo is public again — do not make it private. GitHub
+redirects the old `atravisjones/...` URLs, so the Workspace force-install policy
+(Installation URL = raw `updates.xml`, Update URL = "from the extension manifest") is
+unchanged. Canonical URLs:
 
-- `https://az-roofers-tech-scheduler.vercel.app/ext/updates.xml`
-- `https://az-roofers-tech-scheduler.vercel.app/ext/roofr-calendar-scraper.crx`
+- `https://raw.githubusercontent.com/arizona-roofers/roofr-calendar-extension/main/updates.xml`
+- `https://github.com/arizona-roofers/roofr-calendar-extension/releases/download/vX.Y.Z/roofr-calendar-scraper.crx`
 
-Source: `arizona-roofers-rep-schedler/public/ext/`. The Workspace force-install policy
-(Admin console → Devices → Chrome → Apps & extensions → OU "AZ Roof Co." → fkldnf entry)
-must point its update URL at that `updates.xml` — the old raw.githubusercontent URL is dead.
+CI releases need the org setting **Settings → Actions → General → Workflow permissions =
+Read and write** (the repo-level setting is locked by the org). Until it is on, the
+"Create GitHub Release" step 403s and the release is published manually:
+`git worktree add <tmp> vX.Y.Z` → copy the fkldnf `extension.pem` in → `npm ci` →
+`node scripts/build-crx.cjs` → `scripts/get-crx-id.cjs` must print
+`fkldnfkfppeicfcgmlnpknfkmnfkaabo` → zip the release.yml file list →
+`gh release create vX.Y.Z --latest <zip> releases/roofr-calendar-scraper.crx`.
 
-Release procedure: `npm run ship` (bump + tag + push) → build the crx from the tag in a
-clean worktree with the fkldnf `extension.pem` (`node scripts/build-crx.cjs`, verify
-`scripts/get-crx-id.cjs` prints `fkldnfkfppeicfcgmlnpknfkmnfkaabo`) → copy
-`releases/roofr-calendar-scraper.crx` into the scheduler repo's `public/ext/`, bump
-`version=` in its `public/ext/updates.xml` → `vercel --prod --yes` there. The GitHub
-Actions release workflow is archival only (and 403s until the org enables workflow write
-permissions); Chrome never reads GitHub.
+Backup host (same two files, synced by hand when needed): `https://az-roofers-tech-scheduler.vercel.app/ext/`.
