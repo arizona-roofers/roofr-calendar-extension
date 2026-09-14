@@ -587,6 +587,7 @@
     "GAF":                                 { label: "GAF",  cls: "src-gaf" },
     "Arizona Roofers LSA Messages":        { label: "LSA",  cls: "src-ads" },
     "Roof Pro LSA Messages":               { label: "LSA",  cls: "src-ads" },
+    "Arizona Roofers Angis Leads":         { label: "ANGI", cls: "src-ads" },
   };
   function sourcePillHtml(source) {
     const src = (source || "").trim();

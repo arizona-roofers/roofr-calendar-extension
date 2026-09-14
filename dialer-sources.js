@@ -33,6 +33,12 @@
     // matching brand's LSA Messages line.
     "Arizona Roofers LSA Messages":        { number: "+16027557576", name: "Arizona Roofers LSA Messages" },
     "Roof Pro LSA Messages":               { number: "+16026710260", name: "AZ Roof Pro LSA Messages" },
+    // Angi leads (2026-09-14): Angi emails LeadTruffle → lsa_leads (company
+    // "angi"/"angi-email") → sheet. Call back from the Angie Ads line — the
+    // number Angi customers already see on the profile.
+    "Arizona Roofers Angis Leads":         { number: "+16026380471", name: "Angie Ads" },
+    "AZROOFCO ANGIS LEADS":                { number: "+16026380471", name: "Angie Ads" },
+    "AZROOFCO ANGIS ADS":                  { number: "+16026380471", name: "Angie Ads" },
 
     // ── Roofr job lead_source labels (Welcome Calls dialer) ──
     // LSA leads arrive as Google LSA *messages* → call back from the matching LSA Messages line.
