@@ -895,6 +895,7 @@
     let skippedSource = 0;
     let skippedAttempts = 0;
     let skippedResolvedDupe = 0;
+    let skippedDupePhone = 0;
 
     // Same-day duplicate guard. A sync race can land the SAME lead on two rows
     // with an identical receipt date. When a rep dispositions one copy
@@ -909,6 +910,39 @@
       if (ALLOWED_STATUSES.has(st)) continue;          // open row — not a resolution
       const key = dupeDayKey(l);
       if (key) resolvedSameDay.add(key);
+    }
+
+    // Phone-level dedup of OPEN rows. The sheet can hold the same lead twice (a
+    // sync race, an upstream re-send). The API returns raw rows with NO phone
+    // dedup — the legacy `leads` map used to collapse them, and that protection
+    // was lost in the move to `rows` — so both copies entered the queue and the
+    // rep called one person twice in a single pass: Larry Bigelow
+    // (623) 330-5604 got calls 2 minutes apart on 2026-09-14, and every day
+    // since 9/7. The per-row 3-hour gap cannot catch it, because each copy
+    // carries its own lastContactDate. Keep ONE open row per phone: the most
+    // recently contacted, so the gap and the attempt cap are judged against the
+    // copy worked last (the conservative pick). Terminal rows are left alone —
+    // they feed the same-day guard above and never get dialed anyway.
+    const dupeRowsToSkip = new Set();
+    {
+      const openByPhone = new Map();
+      for (const l of rows) {
+        if (!ALLOWED_STATUSES.has((l.status || "").trim().toLowerCase())) continue;
+        const ph = l.phone10 || (l.phone || "").replace(/\D/g, "").slice(-10);
+        if (ph.length !== 10) continue;
+        if (!openByPhone.has(ph)) openByPhone.set(ph, []);
+        openByPhone.get(ph).push(l);
+      }
+      for (const group of openByPhone.values()) {
+        if (group.length < 2) continue;
+        group.sort((a, b) =>
+          ((Date.parse(b.lastContactDate) || 0) - (Date.parse(a.lastContactDate) || 0)) ||
+          ((parseInt(b.attemptCount) || 0) - (parseInt(a.attemptCount) || 0)) ||
+          ((a.rowIndex || 0) - (b.rowIndex || 0)));
+        for (const loser of group.slice(1)) {
+          if (loser.rowIndex) dupeRowsToSkip.add(loser.rowIndex);
+        }
+      }
     }
 
     // Collect all unique sources for the filter UI (excluding blocklisted ones)
@@ -961,6 +995,9 @@
       // Duplicate of a lead already resolved on another row the same day.
       const dupeKey = dupeDayKey(l);
       if (dupeKey && resolvedSameDay.has(dupeKey)) { skippedResolvedDupe++; continue; }
+
+      // Same phone is already represented by another open row this pass.
+      if (l.rowIndex && dupeRowsToSkip.has(l.rowIndex)) { skippedDupePhone++; continue; }
 
       // Source filter — skip if source doesn't match active filters
       if (filterSources.size > 0) {
@@ -1036,6 +1073,7 @@
       if (skippedSource > 0) parts.push(`${skippedSource} filtered by source`);
       if (skippedAttempts > 0) parts.push(`${skippedAttempts} filtered by attempts`);
       if (skippedResolvedDupe > 0) parts.push(`${skippedResolvedDupe} duplicate of a lead resolved today`);
+      if (skippedDupePhone > 0) parts.push(`${skippedDupePhone} duplicate row for a number already queued`);
       if (parts.length > 0) log(parts.join(", "), "info", "queue");
     }
     updateFilterStats(skippedSource, skippedAttempts, skipped3hr);
