@@ -138,7 +138,6 @@
   let _lsaBusyAtDial = false;
   let _lsaSkippedIds = new Set();
   let _lsaLtTabId = null;         // the single reused LeadTruffle conversation tab
-  let _angiWinIds = [];           // the current tiled Angi + LeadTruffle windows
   // LeadTruffle client_ids whose conversation has been archived. Refreshed from
   // the app's tRPC on a TTL; empty when no LeadTruffle tab is open, which fails
   // OPEN (nothing gets hidden) rather than silently emptying the queue.
@@ -552,7 +551,7 @@
     if (phase === "lt-review") {
       $("lt-dial-btn").onclick = () => dialCurrentLead();
       $("lt-skip-btn").onclick = () => skipLtReviewLead();
-      $("lt-thread-btn").onclick = () => { if (currentLead?.ltUrl) lsaOpenConversationTab(currentLead.ltUrl, currentLead.angiUrl); };
+      $("lt-thread-btn").onclick = () => { if (currentLead?.ltUrl) lsaOpenConversationTab(currentLead.ltUrl); };
     } else {
       $("hangup-btn").onclick = onHangupClick;
     }
@@ -1719,7 +1718,7 @@
       stopCallTimer();
       setPhase("lt-review");
       log(`⏸ LSA lead ${leadTag(lead)} — LeadTruffle review before dial`, "act", "dial");
-      lsaOpenConversationTab(lead.ltUrl, lead.angiUrl);
+      lsaOpenConversationTab(lead.ltUrl);
       return;
     }
 
@@ -3343,7 +3342,6 @@
         if (token) return token;
       } catch (_) { /* fall through to re-discovery */ }
       _lsaLtTabId = null;
-      lsaCloseAngiWindows();
     }
 
     const tabs = await chrome.tabs.query({ url: "https://app.leadtruffle.com/*" });
@@ -4899,105 +4897,11 @@
     }
   }
 
-  function lsaCloseAngiWindows(windowIds = _angiWinIds) {
-    if (windowIds === _angiWinIds) _angiWinIds = [];
-    for (const windowId of windowIds) {
-      if (windowId == null) continue;
-      try {
-        chrome.windows.remove(windowId, () => { void chrome.runtime.lastError; });
-      } catch (_) {}
-    }
-  }
-
-  function lsaOpenAngiConversationWindows(angiUrl, ltUrl) {
-    const previousLtTabId = _lsaLtTabId;
-    const previousAngiWinIds = _angiWinIds;
-    const screenWidth = Number(window.screen && window.screen.availWidth) || 960;
-    const screenHeight = Number(window.screen && window.screen.availHeight) || 1000;
-    const leftWidth = Math.floor(screenWidth / 2);
-    const rightWidth = screenWidth - leftWidth;
-    const createdWinIds = [];
-    let angiWindow = null;
-    let ltWindow = null;
-    let angiDone = false;
-    let ltDone = false;
-
-    const finish = () => {
-      if (!angiDone || !ltDone) return;
-      _angiWinIds = createdWinIds;
-      _lsaLtTabId = ltWindow?.tabs?.[0]?.id ?? null;
-      lsaCloseAngiWindows(previousAngiWinIds);
-      if (previousLtTabId != null && previousLtTabId !== _lsaLtTabId) {
-        try {
-          chrome.tabs.remove(previousLtTabId, () => { void chrome.runtime.lastError; });
-        } catch (_) {}
-      }
-    };
-
-    try {
-      chrome.windows.create({
-        url: angiUrl,
-        left: 0,
-        top: 0,
-        width: leftWidth,
-        height: screenHeight,
-        focused: false,
-        type: "normal",
-      }, (win) => {
-        if (chrome.runtime.lastError || !win) {
-          void chrome.runtime.lastError;
-          window.open(angiUrl, "_blank");
-        } else {
-          angiWindow = win;
-          if (angiWindow.id != null) createdWinIds.push(angiWindow.id);
-        }
-        angiDone = true;
-        finish();
-      });
-    } catch (_) {
-      window.open(angiUrl, "_blank");
-      angiDone = true;
-      finish();
-    }
-
-    try {
-      chrome.windows.create({
-        url: ltUrl,
-        left: leftWidth,
-        top: 0,
-        width: rightWidth,
-        height: screenHeight,
-        focused: true,
-        type: "normal",
-      }, (win) => {
-        if (chrome.runtime.lastError || !win) {
-          void chrome.runtime.lastError;
-          window.open(ltUrl, "_blank");
-        } else {
-          ltWindow = win;
-          if (ltWindow.id != null) createdWinIds.push(ltWindow.id);
-        }
-        ltDone = true;
-        finish();
-      });
-    } catch (_) {
-      window.open(ltUrl, "_blank");
-      ltDone = true;
-      finish();
-    }
-
-    log("🪟 Angi lead — opening tiled Angi and LeadTruffle windows", "act", "dial");
-  }
-
-  // Open the LeadTruffle conversation in a fresh tab. Angi leads instead get
-  // their Angi board and LeadTruffle thread tiled side-by-side for review.
-  function lsaOpenConversationTab(url, angiUrl = "") {
+  // Open the LeadTruffle conversation in a fresh tab, reusing/replacing the
+  // previous one. Angi leads take this exact path too (2026-09-16) — the old
+  // tiled Angi + LeadTruffle dual-window flow was confusing and is gone.
+  function lsaOpenConversationTab(url) {
     if (!url) return;
-    if (String(angiUrl || "").trim()) {
-      lsaOpenAngiConversationWindows(angiUrl, url);
-      return;
-    }
-    lsaCloseAngiWindows();
     try {
       const prev = _lsaLtTabId;
       chrome.tabs.create({ url, active: true }, (t) => {
