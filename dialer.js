@@ -1093,6 +1093,12 @@
       const aTest = /\btest\b/i.test(a.name || "");
       const bTest = /\btest\b/i.test(b.name || "");
       if (aTest !== bTest) return aTest ? -1 : 1;
+      // Never-dialed leads (0 attempts) ALWAYS go first — Travis 2026-09-16:
+      // a 3-attempt lead near the bottom of the sheet was being served before
+      // fresh leads higher up. Within each group keep the existing order.
+      const aFresh = (parseInt(a.attemptCount) || 0) === 0;
+      const bFresh = (parseInt(b.attemptCount) || 0) === 0;
+      if (aFresh !== bFresh) return aFresh ? -1 : 1;
       // Descending by rowIndex — start from bottom of sheet, work up
       const aRow = parseInt(a.rowIndex) || 0;
       const bRow = parseInt(b.rowIndex) || 0;
