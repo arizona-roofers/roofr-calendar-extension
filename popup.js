@@ -2973,6 +2973,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             if (!Array.isArray(data?.days)) throw new Error('invalid payload');
+            // Storm weeks have 5 blocks the endpoint doesn't model (s1..s4 only);
+            // return null so the caller falls back to the sheet, which parses
+            // storm tabs per-tab (see storm-5-slot-rollout).
+            if (data.template_kind === 'storm') {
+                addLog(`capacity ${mondayISO}: storm week — using Google Sheets instead of the availability API`);
+                return null;
+            }
             return data.days;
         } catch (e) {
             addLog(`Availability capacity endpoint failed for ${mondayISO}: ${e.message}`, 'WARN');
@@ -3096,27 +3103,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         return { availability: avail, sheetDataFound };
     }
 
+    // API first for EVERY week (2026-09-17). The current week used to read the
+    // sheet first, but the sheet is only regenerated from the DB every ~2h, so a
+    // manager flipping a rep ON for tomorrow was invisible here for up to 2h.
+    // The API reads the DB live. Sheet remains the fallback (API down, or a
+    // storm week — fetchAvailabilityCapacityWeek returns null for those).
     async function computeAvailabilityForSunday(sISO) {
         if (!sISO) return null;
-        if (isFutureWeekSunday(sISO)) {
-            const endpointAvailability = await fetchAvailabilityCapacityForSunday(sISO);
-            if (endpointAvailability) {
-                addLog(`capacity ${sISO}: availability API (ON slots only)`);
-                return endpointAvailability;
-            }
-            const sheet = await computeSheetAvailabilityForSunday(sISO);
-            if (sheet.sheetDataFound) addLog(`capacity ${sISO}: Google Sheets`);
-            return sheet.availability;
-        }
-
-        const sheet = await computeSheetAvailabilityForSunday(sISO);
-        if (sheet.sheetDataFound) {
-            addLog(`capacity ${sISO}: Google Sheets`);
-            return sheet.availability;
-        }
         const endpointAvailability = await fetchAvailabilityCapacityForSunday(sISO);
-        if (endpointAvailability) addLog(`capacity ${sISO}: availability API (ON slots only)`);
-        return endpointAvailability || sheet.availability;
+        if (endpointAvailability) {
+            addLog(`capacity ${sISO}: availability API (ON slots only)`);
+            return endpointAvailability;
+        }
+        const sheet = await computeSheetAvailabilityForSunday(sISO);
+        if (sheet.sheetDataFound) addLog(`capacity ${sISO}: Google Sheets`);
+        return sheet.availability;
     }
 
     async function fetchSheetCapacitiesForSunday(sISO) {
