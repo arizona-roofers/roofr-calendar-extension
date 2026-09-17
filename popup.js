@@ -4436,6 +4436,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     /* ========= Event Listeners Setup ========= */
     if (toggleAllBtn) toggleAllBtn.addEventListener("click", () => { setAllCardsCollapsed(!areAllCardsCollapsed()); updateToggleAllLabel(); });
 
+    // "↻ Capacity" — re-pull rep availability for every visible week from the
+    // scheduler and redraw the day cards, WITHOUT rescanning the calendar.
+    // Lets a CSR see a manager's availability edit seconds after it's made.
+    // Also runs AUTOMATICALLY every CAPACITY_POLL_MS while the panel is visible
+    // (Travis 2026-09-17: "ideally automatic"); the silent pass only redraws
+    // when the numbers actually changed, so the cards never flicker.
+    const CAPACITY_POLL_MS = 60000;
+    let _capacityRefreshing = false;
+    async function refreshCapacity({ silent = false } = {}) {
+        const btn = document.getElementById("refreshCapacityBtn");
+        if (!state.weekDays || state.weekDays.length === 0) { if (!silent) showToast("Scan first — nothing to refresh yet"); return; }
+        if (_capacityRefreshing) return;
+        _capacityRefreshing = true;
+        if (btn && !silent) { btn.disabled = true; btn.textContent = "↻ …"; }
+        try {
+            const distinctSundays = [...new Set(state.weekDays.map(weekSundayKey))].sort();
+            const before = JSON.stringify(distinctSundays.map(s => state.availabilityByWeek?.[s] ?? null));
+            const results = await Promise.all(distinctSundays.map(s => computeAvailabilityForSunday(s)));
+            let updated = 0;
+            distinctSundays.forEach((s, i) => { if (results[i]) { state.availabilityByWeek[s] = results[i]; updated++; } });
+            if (results[0]) state.availability = results[0];
+            const changed = JSON.stringify(distinctSundays.map(s => state.availabilityByWeek?.[s] ?? null)) !== before;
+            if (changed || !silent) await applyRegionFilter();
+            if (!silent) showToast(updated ? "Capacity refreshed" : "Capacity refresh failed — see log");
+            else if (changed) showToast("Rep availability changed — capacity updated");
+            if (changed || !silent) addLog(`Capacity refreshed for ${updated}/${distinctSundays.length} week(s)${changed ? " (changed)" : ""}`);
+        } catch (e) {
+            addLog(`Capacity refresh failed: ${e.message}`, 'ERROR');
+            if (!silent) showToast("Capacity refresh failed");
+        } finally {
+            _capacityRefreshing = false;
+            if (btn && !silent) { btn.disabled = false; btn.textContent = "↻ Capacity"; }
+        }
+    }
+    document.getElementById("refreshCapacityBtn")?.addEventListener("click", () => refreshCapacity());
+    setInterval(() => { if (document.visibilityState === "visible") refreshCapacity({ silent: true }); }, CAPACITY_POLL_MS);
+
     function updateFindCounter() { if (findCounter) findCounter.textContent = `${findStats.index > 0 ? findStats.index : 0} / ${findStats.count}`; }
     const pushFindUpdate = debounce(async (term) => {
         const res = await sendFindCommand({ type: "SIDEFIND_UPDATE", term, flags: { caseSensitive: false, wholeWord: false } });
