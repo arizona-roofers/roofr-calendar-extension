@@ -2485,9 +2485,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Cutoff checkboxes for the primary week — the server path used to drop
             // these entirely (only the DOM-scan path ever fetched them).
             try {
-                const cutoffMon = new Date(`${distinctSundays[0]}T12:00:00Z`);
-                cutoffMon.setUTCDate(cutoffMon.getUTCDate() + 1);
-                state.dayCutoffs = await fetchDayCutoffs(await discoverWeeklyTabNameForDate(cutoffMon));
+                if (_apiCutoffsBySunday[distinctSundays[0]]) {
+                    state.dayCutoffs = _apiCutoffsBySunday[distinctSundays[0]];   // scheduler "Cut off" toggles
+                } else {
+                    const cutoffMon = new Date(`${distinctSundays[0]}T12:00:00Z`);
+                    cutoffMon.setUTCDate(cutoffMon.getUTCDate() + 1);
+                    state.dayCutoffs = await fetchDayCutoffs(await discoverWeeklyTabNameForDate(cutoffMon));
+                }
             } catch { state.dayCutoffs = []; }
 
             addLog(`Server availability loaded. Extracted ${state.allEvents.length} events.`);
@@ -2973,23 +2977,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             if (!Array.isArray(data?.days)) throw new Error('invalid payload');
-            // Storm weeks have 5 blocks the endpoint doesn't model (s1..s4 only);
-            // return null so the caller falls back to the sheet, which parses
-            // storm tabs per-tab (see storm-5-slot-rollout).
-            if (data.template_kind === 'storm') {
-                addLog(`capacity ${mondayISO}: storm week — using Google Sheets instead of the availability API`);
-                return null;
-            }
-            return data.days;
+            // Full payload: { days:[{date, cutoff, regions, totals}], blocks:[{key:'sN', label}],
+            // template_kind }. Storm weeks (5 blocks) are modeled since 2026-09-17 —
+            // `blocks` carries the window labels the SRA sheet would show.
+            const blocks = Array.isArray(data.blocks)
+                ? data.blocks.filter(b => b && /^s\d+$/i.test(String(b.key || '')) && typeof b.label === 'string')
+                : [];
+            return { days: data.days, blocks, template_kind: data.template_kind || 'standard' };
         } catch (e) {
             addLog(`Availability capacity endpoint failed for ${mondayISO}: ${e.message}`, 'WARN');
             return null;
         }
     }
 
-    function mapAvailabilityCapacityDays(sISO, primaryDays, secondaryDays) {
+    function mapAvailabilityCapacityDays(sISO, primaryDays, secondaryDays, primaryBlocks = [], secondaryBlocks = []) {
         const regions = ['PHX', 'NORTH', 'SOUTH', 'COMM'];
         const avail = { PHX: {}, SOUTH: {}, NORTH: {}, COMM: {}, ALL: null };
+        // Every advertised block exists even at zero capacity (B5 on storm weeks).
+        for (const b of [...(primaryBlocks || []), ...(secondaryBlocks || [])]) {
+            const m = /^s(\d+)$/i.exec(String(b?.key || ''));
+            if (!m) continue;
+            for (const region of regions) avail[region][`B${m[1]}`] = Array(7).fill(0);
+        }
         const primaryDates = Array.from({ length: 6 }, (_, i) => addDaysISO(sISO, i + 1));
         const primaryByDate = new Map(primaryDays.map(day => [day?.date, day]));
         const secondaryDay = secondaryDays?.find(day => day?.date === sISO);
@@ -3027,21 +3036,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         return avail;
     }
 
+    // Day cutoffs per displayed Sunday, Mon-first [mon..sun] exactly like the
+    // sheet's "Next Days Cutoff" row for the primary (Mon–Sun) tab — same shape
+    // renderDayCard already consumes via state.dayCutoffs. Filled by the API path.
+    const _apiCutoffsBySunday = {};
+
+    // Teach CONFIG the week's block windows from the API's labels (storm weeks
+    // = 5 blocks). registerWeekBlocks ignores plain 4-label layouts itself, so
+    // standard weeks keep their date-cutover defaults exactly as before.
+    function registerApiBlocks(mondayISO, blocks) {
+        if (!CONFIG.registerWeekBlocks || !Array.isArray(blocks) || blocks.length === 0) return;
+        try {
+            CONFIG.registerWeekBlocks(CONFIG.weekMondayKey(new Date(`${mondayISO}T12:00:00Z`)), blocks.map(b => b.label));
+            state.weekBlockDefs = { ...CONFIG.WEEK_BLOCK_DEFS };
+        } catch (e) { addLog(`registerApiBlocks ${mondayISO}: ${e.message}`, 'WARN'); }
+    }
+
     async function fetchAvailabilityCapacityForSunday(sISO) {
         const primaryMonday = addDaysISO(sISO, 1);
         const secondaryMonday = addDaysISO(sISO, -6);
-        const [primaryDays, secondaryDays] = await Promise.all([
+        const [primary, secondary] = await Promise.all([
             fetchAvailabilityCapacityWeek(primaryMonday),
             fetchAvailabilityCapacityWeek(secondaryMonday)
         ]);
-        if (!primaryDays) return null;
-        if (!secondaryDays) {
+        if (!primary) return null;
+        if (!secondary) {
             addLog(`Availability capacity endpoint failed for Sunday ${sISO}; using zero capacity for index 6`, 'WARN');
         }
-        const avail = mapAvailabilityCapacityDays(sISO, primaryDays, secondaryDays);
+        registerApiBlocks(primaryMonday, primary.blocks);
+        if (secondary) registerApiBlocks(secondaryMonday, secondary.blocks);
+        const avail = mapAvailabilityCapacityDays(sISO, primary.days, secondary?.days, primary.blocks, secondary?.blocks);
         if (!avail) {
             addLog(`Availability capacity endpoint returned incomplete data for ${sISO}`, 'WARN');
+            return null;
         }
+        _apiCutoffsBySunday[sISO] = [...primary.days]
+            .filter(d => d && typeof d.date === 'string')
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, 7)
+            .map(d => d.cutoff === true);
         return avail;
     }
 
@@ -3130,13 +3163,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const monDate = new Date(sunDate);
         monDate.setUTCDate(sunDate.getUTCDate() + 1); // Monday after this Sunday
 
-        const primaryTab = CONFIG.apiKey && settings.NEXT_SHEET_ID
-            ? await discoverWeeklyTabNameForDate(monDate)
-            : null;
-        const [availability, dayCutoffs] = await Promise.all([
-            computeAvailabilityForSunday(sISO),
-            fetchDayCutoffs(primaryTab)
-        ]);
+        const availability = await computeAvailabilityForSunday(sISO);
+        // Cutoffs: from the scheduler (API path) — sheet checkbox row only as fallback.
+        let dayCutoffs = _apiCutoffsBySunday[sISO];
+        if (!dayCutoffs) {
+            const primaryTab = CONFIG.apiKey && settings.NEXT_SHEET_ID
+                ? await discoverWeeklyTabNameForDate(monDate)
+                : null;
+            dayCutoffs = await fetchDayCutoffs(primaryTab);
+        }
 
         // Store cutoffs in state
         state.dayCutoffs = dayCutoffs;
@@ -4452,12 +4487,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (btn && !silent) { btn.disabled = true; btn.textContent = "↻ …"; }
         try {
             const distinctSundays = [...new Set(state.weekDays.map(weekSundayKey))].sort();
-            const before = JSON.stringify(distinctSundays.map(s => state.availabilityByWeek?.[s] ?? null));
+            const snapshot = () => JSON.stringify([distinctSundays.map(s => state.availabilityByWeek?.[s] ?? null), state.dayCutoffs || []]);
+            const before = snapshot();
             const results = await Promise.all(distinctSundays.map(s => computeAvailabilityForSunday(s)));
             let updated = 0;
             distinctSundays.forEach((s, i) => { if (results[i]) { state.availabilityByWeek[s] = results[i]; updated++; } });
             if (results[0]) state.availability = results[0];
-            const changed = JSON.stringify(distinctSundays.map(s => state.availabilityByWeek?.[s] ?? null)) !== before;
+            if (_apiCutoffsBySunday[distinctSundays[0]]) state.dayCutoffs = _apiCutoffsBySunday[distinctSundays[0]];
+            const changed = snapshot() !== before;
             if (changed || !silent) await applyRegionFilter();
             if (!silent) showToast(updated ? "Capacity refreshed" : "Capacity refresh failed — see log");
             else if (changed) showToast("Rep availability changed — capacity updated");
