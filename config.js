@@ -988,7 +988,36 @@ export const CONFIG = {
       }
     }
 
-    return { booked, capacity, perBlockBooked, perBlockRemaining, dayOver, netAvailable };
+    // Per-rep daily caps: a DAY ceiling, not a per-window one. A rep capped at 2
+    // is genuinely bookable in each of their AVB windows, so no single block
+    // shrinks; instead the day stops accepting work once `booked` reaches
+    // dayMax. Every block keeps its own remaining until that point, then they
+    // all go to 0 together — which is the honest picture ("any 2 of these 4").
+    const dayMax = this.getDayMax(region, d.getDay(), availability);
+    let dayCapRemaining = null;
+    if (dayMax !== null) {
+      dayCapRemaining = Math.max(0, dayMax - booked);
+      for (const k of blockKeys) {
+        const rem = perBlockRemaining[k];
+        // Only ever LOWER a positive remaining. An already-overbooked block
+        // (negative) keeps its overage so "N over" still shows.
+        if (rem !== null && rem > 0) perBlockRemaining[k] = Math.min(rem, dayCapRemaining);
+      }
+      netAvailable = Math.min(netAvailable, dayCapRemaining);
+    }
+
+    return { booked, capacity, perBlockBooked, perBlockRemaining, dayOver, netAvailable,
+             dayMax, dayCapRemaining };
+  },
+
+  // Per-rep daily cap ceiling for a region on a date, or null when no rep is
+  // capped (or the data came from the sheet, which cannot express a cap).
+  getDayMax(regionKey, jsWeekday, availability) {
+    const arr = availability?.dayMax?.[regionKey];
+    if (!Array.isArray(arr)) return null;
+    const WEEKDAY_TO_MONFIRST = [6, 0, 1, 2, 3, 4, 5];
+    const v = arr[WEEKDAY_TO_MONFIRST[jsWeekday]];
+    return Number.isFinite(v) ? v : null;
   },
 
   buildCityTally(dateStr, eventsForDay) {

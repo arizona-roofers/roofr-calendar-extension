@@ -2977,13 +2977,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             if (!Array.isArray(data?.days)) throw new Error('invalid payload');
-            // Full payload: { days:[{date, cutoff, regions, totals}], blocks:[{key:'sN', label}],
-            // template_kind }. Storm weeks (5 blocks) are modeled since 2026-09-17 —
-            // `blocks` carries the window labels the SRA sheet would show.
+            // Full payload: { days:[{date, cutoff, regions, totals, day_max}], blocks:[{key:'sN', label}],
+            // template_kind, rep_caps }. Storm weeks (5 blocks) are modeled since
+            // 2026-09-17 — `blocks` carries the window labels the SRA sheet would show.
+            // day_max (2026-09-18) = the most appointments a region can actually run
+            // that DAY once per-rep daily caps are applied. The per-window numbers in
+            // `regions` are NOT reduced by a cap: a rep capped at 2 really is bookable
+            // in each of their AVB windows, they just cannot run all of them. So a cap
+            // closes the DAY once its booked count reaches day_max.
             const blocks = Array.isArray(data.blocks)
                 ? data.blocks.filter(b => b && /^s\d+$/i.test(String(b.key || '')) && typeof b.label === 'string')
                 : [];
-            return { days: data.days, blocks, template_kind: data.template_kind || 'standard' };
+            return { days: data.days, blocks, template_kind: data.template_kind || 'standard',
+                     rep_caps: data.rep_caps === true };
         } catch (e) {
             addLog(`Availability capacity endpoint failed for ${mondayISO}: ${e.message}`, 'WARN');
             return null;
@@ -2993,6 +2999,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     function mapAvailabilityCapacityDays(sISO, primaryDays, secondaryDays, primaryBlocks = [], secondaryBlocks = []) {
         const regions = ['PHX', 'NORTH', 'SOUTH', 'COMM'];
         const avail = { PHX: {}, SOUTH: {}, NORTH: {}, COMM: {}, ALL: null };
+        // Per-rep daily caps, as a DAY ceiling per region, Mon-first [mon..sun] like
+        // the block arrays. Left null when the endpoint reports no capped reps, so
+        // the sheet fallback path (which cannot express a cap) behaves as before.
+        const dayMax = { PHX: Array(7).fill(null), SOUTH: Array(7).fill(null),
+                         NORTH: Array(7).fill(null), COMM: Array(7).fill(null), ALL: Array(7).fill(null) };
+        let sawDayMax = false;
         // Every advertised block exists even at zero capacity (B5 on storm weeks).
         for (const b of [...(primaryBlocks || []), ...(secondaryBlocks || [])]) {
             const m = /^s(\d+)$/i.exec(String(b?.key || ''));
@@ -3010,6 +3022,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const addDay = (day, index) => {
             if (!day || typeof day.regions !== 'object' || !day.regions) return false;
+            if (day.day_max && typeof day.day_max === 'object') {
+                for (const region of [...regions, 'ALL']) {
+                    const raw = Number(day.day_max[region]);
+                    if (Number.isFinite(raw) && raw >= 0) { dayMax[region][index] = raw; sawDayMax = true; }
+                }
+            }
             for (const region of regions) {
                 const slots = day.regions[region];
                 if (!slots || typeof slots !== 'object') return false;
@@ -3033,6 +3051,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (Object.keys(avail[region]).length === 0) avail[region] = null;
         }
         avail.ALL = CONFIG.sumMaps(CONFIG.sumMaps(avail.PHX, avail.NORTH), avail.SOUTH);
+        // Attached under a non-region key on purpose: every consumer reads
+        // avail[REGION][blockKey], and the region lists are explicit, so nothing
+        // that walks regions picks this up. computeDailyTotals reads it directly,
+        // which means all three of its call sites honour the cap with no
+        // signature change.
+        if (sawDayMax) avail.dayMax = dayMax;
         return avail;
     }
 
@@ -3873,6 +3897,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         grid.className = 'blocks-grid';
         const blocks = CONFIG.blockWindowForDate(d);
 
+        // Per-rep daily caps close the DAY, not a window (see computeDailyTotals):
+        // every block keeps its own remaining until the day's total is reached.
+        // Holds count against that ceiling exactly like bookings do, so they are
+        // tallied for the whole day here rather than per block.
+        const dayRegionKey = String(state.currentRegion || '').toUpperCase();
+        const dayHeldTotal = totals.dayMax === null || totals.dayMax === undefined
+            ? 0
+            : [...slotHolds.values()].filter(hold =>
+                hold.region === dayRegionKey && hold.hold_date === dateStr).length;
+        const dayCapLeft = totals.dayMax === null || totals.dayMax === undefined
+            ? null
+            : Math.max(0, totals.dayMax - totals.booked - dayHeldTotal);
+
         for (const blk of blocks) {
             const div = document.createElement("div");
             div.className = "block-item"; div.dataset.blockKey = blk.key;
@@ -3887,7 +3924,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const me = currentRepIdentity?.rep_id;
             const myHold = me ? holds.find(hold => hold.rep_id === me) : null;
             const others = me ? holds.filter(hold => hold.rep_id !== me) : holds;
-            const remaining = Number.isFinite(cap) ? cap - booked - heldCount : null;
+            let remaining = Number.isFinite(cap) ? cap - booked - heldCount : null;
+            // Lower a positive remaining to what the day's rep caps still allow.
+            // Never touch a negative (overbooked) value — "N over" must still show.
+            const cappedByDay = remaining !== null && remaining > 0 && dayCapLeft !== null
+                && dayCapLeft < remaining;
+            if (cappedByDay) remaining = dayCapLeft;
 
             // Auto-release: when a real booking lands in a slot I reserved (the booked count rises
             // above what it was when I placed the hold), drop my hold so it flips cleanly to
@@ -3910,9 +3952,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // No capacity set for this time slot
                     statusHtml = `<span class="stat-muted stat-bold">No Availability</span>`;
                 } else if (remaining === 0) {
-                    statusHtml = `<span class="stat-full stat-bold">Fully Booked</span>`;
+                    // Distinguish "this window is full" from "the day's rep caps are
+                    // used up" — the window itself may still have open capacity.
+                    statusHtml = dayCapLeft === 0 && cap - booked - heldCount > 0
+                        ? `<span class="stat-full stat-bold" title="This time window still has room, but every rep working today has hit their max appointments for the day.">Day cap reached</span>`
+                        : `<span class="stat-full stat-bold">Fully Booked</span>`;
                 } else if (remaining > 0) {
-                    statusHtml = `<span class="stat-ok stat-bold">${remaining} left</span>`;
+                    statusHtml = cappedByDay
+                        ? `<span class="stat-ok stat-bold" title="Limited by rep daily caps: the day has ${dayCapLeft} appointment${dayCapLeft === 1 ? '' : 's'} left in total across all windows.">${remaining} left (day cap)</span>`
+                        : `<span class="stat-ok stat-bold">${remaining} left</span>`;
                 } else {
                     statusHtml = `<span class="stat-err stat-bold">${Math.abs(remaining)} over</span>`;
                 }
