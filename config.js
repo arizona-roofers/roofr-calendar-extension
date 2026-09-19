@@ -651,6 +651,25 @@ export const CONFIG = {
     if (ev?.jobId != null) this._commercialKeys.add(`j:${ev.jobId}`);
     if (ev?.title) this._commercialKeys.add(`t:${String(ev.title).trim().toUpperCase()}`);
   },
+  // "Phone followup" is a Roofr SALES subtype (new 2026-09-20) that is not a
+  // field visit: a rep calls an old customer from a desk, a dozen in a row in
+  // 15-minute blocks. It must never count as a booked appointment — it takes no
+  // slot and no drive time, and the up-north travel rule would make one call on
+  // a Prescott Valley job eat TWO windows.
+  //
+  // Matched on the title because that is all the scan carries: the server
+  // mirror's /api/calendar-events rows have no subtype field, and Roofr titles
+  // these events "Phone followup: <address>". The event-type checkbox dance in
+  // content.js also unticks the subtype, but that only holds while the scanner
+  // owns the filters — this is the check that holds regardless.
+  NON_VISIT_TITLE_RE: /^\s*phone\s+follow[\s-]?ups?\b/i,
+
+  isNonVisitEvent(ev) {
+    const subtype = String(ev?.eventSubtype || ev?.subtype || '').trim();
+    if (/^phone\s+follow[\s-]?ups?$/i.test(subtype)) return true;
+    return this.NON_VISIT_TITLE_RE.test(String(ev?.title || ''));
+  },
+
   isCommercialEvent(ev) {
     if (ev?.isCommercial) return true;
     if (/\[\s*commercial\s*\]/i.test(ev?.title || "")) return true; // job names carry "[Commercial]"
@@ -950,9 +969,13 @@ export const CONFIG = {
 
     // Commercial-tagged events consume COMM capacity only; every other region's
     // booked math ignores them (ALL included — its capacity is PHX+NORTH+SOUTH).
+    // Non-visit events (phone follow-ups) are dropped at ingest, but the booked
+    // math refuses them here too: this function is the one place every caller
+    // (popup day cards, week view, routing) agrees on what "booked" means.
+    const visitEvents = eventsForDay.filter(ev => !this.isNonVisitEvent(ev));
     const countedEvents = region === 'COMM'
-      ? eventsForDay.filter(ev => this.isCommercialEvent(ev))
-      : eventsForDay.filter(ev => !this.isCommercialEvent(ev));
+      ? visitEvents.filter(ev => this.isCommercialEvent(ev))
+      : visitEvents.filter(ev => !this.isCommercialEvent(ev));
 
     for (const ev of countedEvents) {
       const occupiedKeys = new Set(this.occupiedBlockKeys(ev, blocks));

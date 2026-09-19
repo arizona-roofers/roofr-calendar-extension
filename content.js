@@ -4940,24 +4940,33 @@ async function checkTeamMembers(names) {
 }
 
 // Select Sales event type
-// Uncheck the "D2D Sales appointment" sub-filter under Sales. Called AFTER
-// selectSalesEventType so the parent Sales group has already checked all
-// subtypes — we then turn D2D back off so the scanner doesn't accidentally
-// suck in D2D-booked appointments alongside the regular Sales pipeline.
+// Uncheck the Sales sub-filters the scanner must never count. Called AFTER
+// selectSalesEventType, which checks the parent Sales GROUP — that cascades to
+// every child, including ones added to Roofr after this code was written, so
+// each unwanted subtype has to be turned back off by name:
+//   D2D Sales appointment — a separate pipeline, booked by knockers.
+//   Phone followup        — a desk call on an old job (new subtype 2026-09-20).
+//                           Troy books a dozen a day; counted as appointments
+//                           they make a day look full when no rep is booked.
+// Name kept (and the UNCHECK_D2D_SALES message with it) so every caller and the
+// service worker keep working; it just unchecks the whole list now.
+const UNWANTED_SALES_SUBTYPES = [
+  { name: 'D2D Sales appointment', re: /^D2D\s+Sales\s+appointment$/i },
+  { name: 'Phone followup', re: /^Phone\s+follow[\s-]?ups?$/i },
+];
+
 async function uncheckD2DSalesEventType() {
   if (!window.location.pathname.includes('/calendar')) {
     return { ok: false, reason: 'Not on calendar page' };
   }
 
-  const D2D_RE = /^D2D\s+Sales\s+appointment$/i;
-
-  const findD2DCheckbox = () => {
+  const findSubtypeCheckbox = (RE) => {
     for (const el of document.querySelectorAll('*')) {
       const direct = Array.from(el.childNodes)
         .filter(n => n.nodeType === Node.TEXT_NODE)
         .map(n => n.textContent.trim())
         .join('');
-      if (D2D_RE.test(direct) || (el.children.length === 0 && D2D_RE.test((el.textContent || '').trim()))) {
+      if (RE.test(direct) || (el.children.length === 0 && RE.test((el.textContent || '').trim()))) {
         let cur = el;
         for (let i = 0; i < 6; i++) {
           const parent = cur.parentElement;
@@ -4989,21 +4998,27 @@ async function uncheckD2DSalesEventType() {
     return false;
   };
 
-  let found = findD2DCheckbox();
-  if (!found) {
-    expandSalesGroup();
-    // Wait a tick for the accordion to render
-    await new Promise(r => setTimeout(r, 200));
-    found = findD2DCheckbox();
+  let expanded = false;
+  const results = [];
+  for (const subtype of UNWANTED_SALES_SUBTYPES) {
+    let found = findSubtypeCheckbox(subtype.re);
+    if (!found && !expanded) {
+      expandSalesGroup();
+      // Wait a tick for the accordion to render
+      await new Promise(r => setTimeout(r, 200));
+      expanded = true;
+      found = findSubtypeCheckbox(subtype.re);
+    }
+    // A subtype that isn't on the page is not a failure: Roofr only renders the
+    // ones this account has, and it may drop or rename one at any time.
+    if (!found) { results.push({ name: subtype.name, ok: false, reason: 'not found' }); continue; }
+    if (found.cb.checked) { found.cb.click(); results.push({ name: subtype.name, ok: true, unchecked: true }); }
+    else results.push({ name: subtype.name, ok: true, unchecked: false, wasAlreadyUnchecked: true });
   }
 
-  if (!found) return { ok: false, reason: 'D2D Sales appointment not found' };
-
-  if (found.cb.checked) {
-    found.cb.click();
-    return { ok: true, unchecked: true };
-  }
-  return { ok: true, unchecked: false, wasAlreadyUnchecked: true };
+  const hit = results.filter(r => r.ok);
+  if (!hit.length) return { ok: false, reason: 'no unwanted Sales subtypes found', results };
+  return { ok: true, unchecked: hit.some(r => r.unchecked), results };
 }
 
 function selectSalesEventType() {
@@ -5309,7 +5324,10 @@ function setEventTypeFilter(name, shouldCheck) {
 // (verified). The full list is used for a deterministic clean-slate so a profile
 // never depends on uncheck-cascade behavior.
 const EVENT_TYPE_GROUPS = {
-  'Sales': ['Sales appointment', 'Sales followup', 'Self-gen appointment', 'Paint consultation', 'D2D Sales appointment'],
+  // 'Phone followup' is listed so the clean-slate pass can clear it; it is
+  // deliberately absent from PROFILE_TYPES.retail below — see
+  // UNWANTED_SALES_SUBTYPES.
+  'Sales': ['Sales appointment', 'Sales followup', 'Self-gen appointment', 'Paint consultation', 'D2D Sales appointment', 'Phone followup'],
   'General': ['Adjuster meeting'],
   'Dropoffs and pickups': ['Material drop', 'Material pickup', 'ITEL Sample', 'Repair Test'],
   'Production': ['Roof install', 'Roof repair', 'Exterior paint install', 'Solar detach', 'Solar reinstall', 'Tarp'],

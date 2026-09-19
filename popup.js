@@ -2458,7 +2458,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             pageDatesISO = days;
             state.allEvents = json.events
                 .map(mapCalendarEventRowToScanEvent)
-                .filter(ev => ev.start && ev.end && ev.title);
+                .filter(ev => ev.start && ev.end && ev.title)
+                // Phone follow-ups are desk calls, not visits: dropped at ingest so
+                // capacity, day cards, copy lines and routing all agree. See
+                // CONFIG.isNonVisitEvent.
+                .filter(ev => !CONFIG.isNonVisitEvent?.(ev));
             // Teach CONFIG which jobs are commercial so DOM-scanned copies of the
             // same events (no tag data) classify identically — otherwise the Comm
             // view flip-flops whenever a scan replaces the server events.
@@ -5764,7 +5768,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const otherAvail = await Promise.all(otherSundays.map(s => computeAvailabilityForSunday(s)));
                 otherSundays.forEach((s, i) => { if (otherAvail[i]) state.availabilityByWeek[s] = otherAvail[i]; });
 
-                state.allEvents = eventData?.events || [];
+                state.allEvents = (eventData?.events || [])
+                    .filter(ev => !CONFIG.isNonVisitEvent?.(ev));  // phone follow-ups: see ingest 1
                 state.parsedJobs = state.allEvents.map(ev => CONFIG.parseJobDetails(ev));
 
                 // Keep the DOM read of past days (yesterday) so the next server
