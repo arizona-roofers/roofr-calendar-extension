@@ -681,6 +681,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         recoRankedPerDay: {}, // Map: dateStr -> up to top-3 ranked candidates (gold/silver/bronze render)
         regionOverrides: {}, // Store overrides mapping: "Event Title + Start Time" -> "PHX" | "NORTH" | "SOUTH"
         dayCutoffs: [], // Array of booleans for Mon-Sun indicating if day is cutoff
+        dayPublished: {}, // dateISO -> live-board URL for days whose schedule the planner has PUBLISHED
         ignoredEvents: {}, // Store ignored uncategorized events: "Event Title + Start Time" -> true
         earliestAvailableByCity: {}, // Track earliest available date per city across weeks: { "MESA": "2025-12-27", ... }
         recentAddresses: [], // Track last 3 entered addresses/cities for quick access
@@ -3068,6 +3069,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // sheet's "Next Days Cutoff" row for the primary (Mon–Sun) tab — same shape
     // renderDayCard already consumes via state.dayCutoffs. Filled by the API path.
     const _apiCutoffsBySunday = {};
+    // Published days from the same payload, keyed by DATE (not weekday index)
+    // so the two weeks a Sunday-first view spans merge without arithmetic.
+    const _apiPublishedBySunday = {};
+    function applyPublishedFromApi() {
+        state.dayPublished = Object.assign({}, ...Object.values(_apiPublishedBySunday));
+    }
 
     // Teach CONFIG the week's block windows from the API's labels (storm weeks
     // = 5 blocks). registerWeekBlocks ignores plain 4-label layouts itself, so
@@ -3103,6 +3110,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             .sort((a, b) => a.date.localeCompare(b.date))
             .slice(0, 7)
             .map(d => d.cutoff === true);
+        // Published days (scheduler "Publish" toggle): the planner's schedule for
+        // that date is final, so the card points CSRs at the live board.
+        _apiPublishedBySunday[sISO] = {};
+        for (const d of [...primary.days, ...(secondary?.days || [])]) {
+            if (d && typeof d.date === 'string' && d.published === true && typeof d.live_url === 'string' && d.live_url) {
+                _apiPublishedBySunday[sISO][d.date] = d.live_url;
+            }
+        }
+        applyPublishedFromApi();
         return avail;
     }
 
@@ -3644,11 +3660,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isCutoff = !isPast && (isToday || (state.dayCutoffs && state.dayCutoffs[monFirstIndex]) || isTomorrowAfterCutoff);
         if (isCutoff) card.classList.add("day-cutoff");
 
+        // PUBLISHED: the planner's schedule for this day is final (scheduler
+        // "Publish" toggle, 2026-09-19). What is actually open lives on the live
+        // board, so this card stops being a menu of slot counts and becomes a
+        // signpost: the amber "Reps Scheduled" treatment plus a link, no rows.
+        const liveBoardUrl = !isPast ? (state.dayPublished?.[dateStr] || null) : null;
+        const isPublished = !!liveBoardUrl;
+        if (isPublished) card.classList.add("day-cutoff", "day-published");
+
         // Mark days that should be shrunk (past, no availability, or reps scheduled/cutoff).
         // EXCEPT today — keep it full-sized so reps can see today's events and any
         // late-cancellation slots. The "Reps Scheduled" badge still appears.
         const noAvailability = totals.capacity === 0;
-        if (!isToday && (isPast || noAvailability || isCutoff)) {
+        if (!isToday && (isPast || noAvailability || isCutoff || isPublished)) {
             card.classList.add("day-shrunk");
         }
 
@@ -3657,8 +3681,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         header.className = 'card-header';
 
         let badgesHtml = '';
-        if (isCutoff) {
+        if (isCutoff || isPublished) {
             badgesHtml += `<span class="badge warning" style="background: #f59e0b; color: white;">Reps Scheduled</span> `;
+            if (isPublished) {
+                badgesHtml += `<a class="badge live-board-link" href="${liveBoardUrl}" target="_blank" rel="noopener" title="Open this day's live board to check what is actually open">Check live board &#8599;</a> `;
+            }
         } else if (isPast && !noAvailability) {
             // Past day with availability set - reps were scheduled
             badgesHtml += `<span class="badge warning" style="background: #f59e0b; color: white;">Reps Scheduled</span> `;
@@ -3694,6 +3721,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     </div>
   `;
         card.appendChild(header);
+        // The header toggles collapse on click; the live-board link must not.
+        header.querySelector('a.live-board-link')?.addEventListener('click', e => e.stopPropagation());
 
         // Uncategorized Events (Moved outside .card-body to show when collapsed)
         // Filter events that do NOT have a region override, are not ignored, and don't contain "sales"
@@ -4190,6 +4219,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (expandedDays.has(dateStr)) setCardCollapsed(card, false);
         // If userPrefs.showUncatCollapsed is true, uncatBox is already visible.
 
+        if (isPublished) {
+            // Signpost, not a menu: drop the block rows and totals this day would
+            // otherwise offer. Header (badge + link), chevron and uncategorized
+            // events stay. Built last so every handler above attached normally;
+            // the removed nodes take their listeners with them, and the tier
+            // decorator finds no .block-item to award.
+            const notice = document.createElement('div');
+            notice.className = 'published-notice';
+            const dayLabel = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+            notice.innerHTML = `
+                <div class="published-notice-title">Reps are scheduled for ${dayLabel}.</div>
+                <div class="published-notice-body">Slot counts are hidden once a day's schedule is published. Check what is actually open on the live board before booking.</div>
+                <a class="btn published-notice-link" href="${liveBoardUrl}" target="_blank" rel="noopener">Open live board &#8599;</a>`;
+            body.replaceChildren(notice);
+        }
+
         return card;
     }
 
@@ -4539,7 +4584,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (btn && !silent) { btn.disabled = true; btn.textContent = "↻ …"; }
         try {
             const distinctSundays = [...new Set(state.weekDays.map(weekSundayKey))].sort();
-            const snapshot = () => JSON.stringify([distinctSundays.map(s => state.availabilityByWeek?.[s] ?? null), state.dayCutoffs || []]);
+            const snapshot = () => JSON.stringify([distinctSundays.map(s => state.availabilityByWeek?.[s] ?? null), state.dayCutoffs || [], state.dayPublished || {}]);
             const before = snapshot();
             const results = await Promise.all(distinctSundays.map(s => computeAvailabilityForSunday(s)));
             let updated = 0;
@@ -6752,6 +6797,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log(`Skipping ${dateStr}: before tomorrow (${tomorrowISO})`);
                 continue;
             }
+            // A published day has no slot options to recommend — the live board decides.
+            if (state.dayPublished?.[dateStr]) {
+                console.log(`Skipping ${dateStr}: schedule published`);
+                continue;
+            }
             const dailyEvents = allEvents.filter(e => localDayKey(e.start) === dateStr);
             const totals = CONFIG.computeDailyTotals(dateStr, dailyEvents, availability, currentRegion);
             // Check if ANY block has availability (don't skip based on netAvailable alone)
@@ -7598,7 +7648,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const t0 = performance.now();
                 const { candidatesByDay, stats } = scoreRouteCandidates({
                     leadPoint,
-                    weekDays: state.weekDays,
+                    weekDays: state.weekDays.filter(d => !state.dayPublished?.[d]),  // published days: live board decides
                     allEvents: state.allEvents,
                     availability: state.availability,
                     currentRegion: state.currentRegion,

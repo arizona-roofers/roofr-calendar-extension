@@ -1014,6 +1014,36 @@
       border-radius: var(--radius) var(--radius) 0 0;
     }
 
+    /* Published day: the planner's schedule is final, the live board decides. */
+    a.badge.live-board-link {
+      background: #1d4ed8;
+      color: #fff;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    a.badge.live-board-link:hover { background: #1e40af; }
+
+    .published-notice {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      border: 1px dashed #f59e0b;
+      border-radius: var(--radius);
+      background: rgba(245, 158, 11, 0.06);
+      font-size: 0.8rem;
+    }
+    .published-notice-title { font-weight: 800; }
+    .published-notice-body { opacity: 0.85; line-height: 1.35; }
+    .published-notice-link {
+      align-self: flex-start;
+      background: #1d4ed8;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .published-notice-link:hover { background: #1e40af; color: #fff; }
+
     .card-header {
       display: flex;
       justify-content: space-between;
