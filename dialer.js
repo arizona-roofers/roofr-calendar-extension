@@ -895,6 +895,7 @@
     let skippedAttempts = 0;
     let skippedResolvedDupe = 0;
     let skippedDupePhone = 0;
+    let forcedFresh = 0;
 
     // Same-day duplicate guard. A sync race can land the SAME lead on two rows
     // with an identical receipt date. When a rep dispositions one copy
@@ -998,16 +999,31 @@
       // Same phone is already represented by another open row this pass.
       if (l.rowIndex && dupeRowsToSkip.has(l.rowIndex)) { skippedDupePhone++; continue; }
 
-      // Source filter — skip if source doesn't match active filters
-      if (filterSources.size > 0) {
+      // Never-called leads bypass the rep's filters. Travis 2026-09-22: reps
+      // were unticking "Missed Call" in the source filter and 14 leads sat at
+      // 0 attempts for over a week — every one has to be dialed at least once
+      // (out-of-state caller IDs do live here). Since 0-attempt leads already
+      // sort first, this makes them the first thing every rep sees no matter
+      // what is ticked; once a lead reaches 1 attempt the filter applies to it
+      // again, so "filter by source" is only ever a choice among worked leads.
+      const neverCalled = attempts === 0;
+      if (neverCalled) {
         const src = (l.source || "").trim();
-        if (!filterSources.has(src)) { skippedSource++; continue; }
-      }
+        const hiddenBySource = filterSources.size > 0 && !filterSources.has(src);
+        const hiddenByAttempts = attempts < attemptRange[0] || attempts > attemptRange[1];
+        if (hiddenBySource || hiddenByAttempts) forcedFresh++;
+      } else {
+        // Source filter — skip if source doesn't match active filters
+        if (filterSources.size > 0) {
+          const src = (l.source || "").trim();
+          if (!filterSources.has(src)) { skippedSource++; continue; }
+        }
 
-      // Attempt range filter
-      if (attempts < attemptRange[0] || attempts > attemptRange[1]) {
-        skippedAttempts++;
-        continue;
+        // Attempt range filter
+        if (attempts < attemptRange[0] || attempts > attemptRange[1]) {
+          skippedAttempts++;
+          continue;
+        }
       }
 
       // Attempt cap hit (10 within 6 months, else 7) → cadence exhausted.
@@ -1073,9 +1089,10 @@
       if (skippedAttempts > 0) parts.push(`${skippedAttempts} filtered by attempts`);
       if (skippedResolvedDupe > 0) parts.push(`${skippedResolvedDupe} duplicate of a lead resolved today`);
       if (skippedDupePhone > 0) parts.push(`${skippedDupePhone} duplicate row for a number already queued`);
+      if (forcedFresh > 0) parts.push(`${forcedFresh} never-called lead${forcedFresh > 1 ? "s" : ""} override your filters`);
       if (parts.length > 0) log(parts.join(", "), "info", "queue");
     }
-    updateFilterStats(skippedSource, skippedAttempts, skipped3hr);
+    updateFilterStats(skippedSource, skippedAttempts, skipped3hr, forcedFresh);
 
     // Fire off auto-Lost saves in background (don't block queue load)
     if (autoLostLeads.length > 0) {
@@ -2768,9 +2785,10 @@
     els.filterSummary.textContent = parts.length > 0 ? parts.join(" + ") : "";
   }
 
-  function updateFilterStats(skippedSource, skippedAttempts, skipped3hr) {
+  function updateFilterStats(skippedSource, skippedAttempts, skipped3hr, forcedFresh = 0) {
     if (!els.filterStats) return;
     const parts = [];
+    if (forcedFresh > 0) parts.push(`${forcedFresh} never-called lead${forcedFresh > 1 ? "s" : ""} override your filters`);
     if (skippedSource > 0) parts.push(`${skippedSource} hidden by source`);
     if (skippedAttempts > 0) parts.push(`${skippedAttempts} hidden by attempts`);
     if (skipped3hr > 0) parts.push(`${skipped3hr} waiting on 3-hr gap`);
