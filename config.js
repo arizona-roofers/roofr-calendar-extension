@@ -677,12 +677,17 @@ export const CONFIG = {
     return !!(ev?.title && this._commercialKeys.has(`t:${String(ev.title).trim().toUpperCase()}`));
   },
 
+  isRepairEvent(ev) {
+    return /\b(repair|leak|patch)\b/i.test([ev?.title, ev?.notes].filter(Boolean).join(' '));
+  },
+
   passesRegion(e, regionKey) {
     if (regionKey === "ALL") return true;
     // Commercial-tagged jobs (jobs.tags via the server feed) belong to the COMM
     // pool: they show under Comm and are hidden from the geographic regions so
     // they never look like residential bookings.
     if (regionKey === "COMM") return this.isCommercialEvent(e);
+    if (regionKey === "REPAIR") return this.isRepairEvent(e);
     if (this.isCommercialEvent(e)) return false;
     const region = this.getRegionForEvent(e);
     // Neither coords nor a known city → "uncategorized": still shows in all filters (unchanged).
@@ -975,7 +980,9 @@ export const CONFIG = {
     const visitEvents = eventsForDay.filter(ev => !this.isNonVisitEvent(ev));
     const countedEvents = region === 'COMM'
       ? visitEvents.filter(ev => this.isCommercialEvent(ev))
-      : visitEvents.filter(ev => !this.isCommercialEvent(ev));
+      : region === 'REPAIR'
+        ? visitEvents.filter(ev => this.isRepairEvent(ev))
+        : visitEvents.filter(ev => !this.isCommercialEvent(ev));
 
     for (const ev of countedEvents) {
       const occupiedKeys = new Set(this.occupiedBlockKeys(ev, blocks));

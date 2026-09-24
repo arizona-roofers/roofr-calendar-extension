@@ -666,7 +666,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         regionPinned: false,
         allEvents: [],
         parsedJobs: [],
-        availability: { PHX: null, SOUTH: null, NORTH: null, COMM: null, ALL: null },
+        availability: { PHX: null, SOUTH: null, NORTH: null, COMM: null, REPAIR: null, ALL: null },
         availabilityByWeek: {}, // Per-week availability keyed by week's Sunday ISO (visible range can span weeks)
         weekDays: [], // This will now store the exact visible days
         addressInput: "",
@@ -2411,6 +2411,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             start,
             end,
             title: String(row?.title || '').trim(),
+            notes: row?.notes || '',
             address: row?.address || '',
             eventType: row?.category || 'Unknown',
             category: row?.category || '',
@@ -2486,7 +2487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             distinctSundays.forEach((s, i) => {
                 if (availabilityResults[i]) state.availabilityByWeek[s] = availabilityResults[i];
             });
-            state.availability = state.availabilityByWeek[distinctSundays[0]] || { PHX: null, SOUTH: null, NORTH: null, COMM: null, ALL: null };
+            state.availability = state.availabilityByWeek[distinctSundays[0]] || { PHX: null, SOUTH: null, NORTH: null, COMM: null, REPAIR: null, ALL: null };
             // Cutoff checkboxes for the primary week — the server path used to drop
             // these entirely (only the DOM-scan path ever fetched them).
             try {
@@ -2726,8 +2727,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // { B1:[Mon..Sun], … } or null; __labels = slot labels in sheet order.
     function parseCapacityTables(values) {
         if (!Array.isArray(values) || !values.length) return null;
-        const SECTION_OF = [["PHOENIX", "PHX"], ["TUCSON", "SOUTH"], ["NORTHERN", "NORTH"], ["COMMERCIAL", "COMM"]];
-        const out = { PHX: null, SOUTH: null, NORTH: null, COMM: null, __labels: null };
+        const SECTION_OF = [["PHOENIX", "PHX"], ["TUCSON", "SOUTH"], ["NORTHERN", "NORTH"], ["COMMERCIAL", "COMM"], ["REPAIR", "REPAIR"]];
+        const out = { PHX: null, SOUTH: null, NORTH: null, COMM: null, REPAIR: null, __labels: null };
         let section = null;
         for (let r = 0; r < values.length; r++) {
             const first = String(values[r]?.[0] || "").trim().toUpperCase();
@@ -2964,7 +2965,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function emptyWeeklyAvailability() {
-        return { PHX: null, SOUTH: null, NORTH: null, COMM: null, ALL: null };
+        return { PHX: null, SOUTH: null, NORTH: null, COMM: null, REPAIR: null, ALL: null };
     }
 
     function isFutureWeekSunday(sISO) {
@@ -2972,7 +2973,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function hasRegionalAvailability(availability) {
-        return ['PHX', 'NORTH', 'SOUTH', 'COMM'].some(region => availability?.[region] !== null);
+        return ['PHX', 'NORTH', 'SOUTH', 'COMM', 'REPAIR'].some(region => availability?.[region] !== null);
     }
 
     async function fetchAvailabilityCapacityWeek(mondayISO) {
@@ -3002,13 +3003,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function mapAvailabilityCapacityDays(sISO, primaryDays, secondaryDays, primaryBlocks = [], secondaryBlocks = []) {
-        const regions = ['PHX', 'NORTH', 'SOUTH', 'COMM'];
-        const avail = { PHX: {}, SOUTH: {}, NORTH: {}, COMM: {}, ALL: null };
+        const regions = ['PHX', 'NORTH', 'SOUTH', 'COMM', 'REPAIR'];
+        const avail = { PHX: {}, SOUTH: {}, NORTH: {}, COMM: {}, REPAIR: {}, ALL: null };
         // Per-rep daily caps, as a DAY ceiling per region, Mon-first [mon..sun] like
         // the block arrays. Left null when the endpoint reports no capped reps, so
         // the sheet fallback path (which cannot express a cap) behaves as before.
         const dayMax = { PHX: Array(7).fill(null), SOUTH: Array(7).fill(null),
-                         NORTH: Array(7).fill(null), COMM: Array(7).fill(null), ALL: Array(7).fill(null) };
+                         NORTH: Array(7).fill(null), COMM: Array(7).fill(null), REPAIR: Array(7).fill(null), ALL: Array(7).fill(null) };
         let sawDayMax = false;
         // Every advertised block exists even at zero capacity (B5 on storm weeks).
         for (const b of [...(primaryBlocks || []), ...(secondaryBlocks || [])]) {
@@ -3163,7 +3164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (secondaryData?.__labels) CONFIG.registerWeekBlocks(CONFIG.weekMondayKey(sunDate), secondaryData.__labels);
             state.weekBlockDefs = { ...CONFIG.WEEK_BLOCK_DEFS };
         }
-        for (const region of ['PHX', 'NORTH', 'SOUTH', 'COMM']) {
+        for (const region of ['PHX', 'NORTH', 'SOUTH', 'COMM', 'REPAIR']) {
             const pData = primaryData?.[region], sData = secondaryData?.[region];
             if (!pData && !sData) { avail[region] = null; continue; }
             const m = {};
@@ -6839,7 +6840,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // in the searched address's region? (e.g. a Flagstaff appt on Monday
             // makes Monday attractive for every other NORTH address.) ALL never
             // clusters — it isn't a geographic region.
-            const regionCount = (currentRegion && currentRegion !== 'ALL' && currentRegion !== 'COMM')
+            const regionCount = (currentRegion && currentRegion !== 'ALL' && currentRegion !== 'COMM' && currentRegion !== 'REPAIR')
                 ? dailyEvents.filter(e => !CONFIG.isCommercialEvent?.(e) && regionOfEvent(e) === currentRegion).length
                 : 0;
 
