@@ -6,6 +6,7 @@ import { fetchRepRoutingProfile, scoreRouteCandidates } from './routing.js';
 
 const SLOT_HOLDS_URL = 'https://roofr-search.vercel.app/api/slot-holds';
 const SLOT_HOLDS_INTERNAL_KEY = 'WSDnmjsudtcCEWvb_TKQKcyWS3TXtcjWqfuLMsnmT96XfqZF';
+const ROOFR_JOB_CARD_URL_BASE = 'https://app.roofr.com/dashboard/team/239329/jobs/list-view?selectedJobId=';
 const slotHolds = new Map();
 const slotHoldHeartbeats = new Map();
 const holdBookingBaseline = new Map(); // hold.id -> real-booked count in its block when first seen (mine), for auto-release when the booking lands
@@ -4002,9 +4003,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Find cities
             const evsInBlock = eventsForDay.filter(ev => occupiedKeysFor(ev, blocks).includes(blk.key));
-            const uniqueCities = [...new Set(evsInBlock.map(ev => CONFIG.getCityFromEvent(ev) || "Uncategorized"))].filter(c => c !== "Uncategorized").sort();
+            const cityEvents = evsInBlock.map(ev => ({
+                city: CONFIG.getCityFromEvent(ev),
+                jobId: ev.job_id ?? ev.jobId
+            })).filter(({ city }) => city);
+            const uniqueCities = [...new Set(cityEvents.map(({ city }) => city))].sort();
 
-            const cityItems = uniqueCities.map(c => {
+            const cityItems = cityEvents.map(({ city: c, jobId }) => {
                 const classes = ["city-hover"];
                 const cityUpper = c.toUpperCase();
                 const highlightedUpper = (state.highlightedCity || '').toUpperCase();
@@ -4016,10 +4021,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Adjacent city - light blue highlight
                     classes.push("city-text-highlight-adjacent");
                 }
-                return `<span class="${classes.join(' ')}">${c}</span>`;
+                const hasJobId = jobId !== null && jobId !== undefined && jobId !== '';
+                const jobAttr = hasJobId ? ` data-job-id="${_escapeHtml(jobId)}" title="Open job card"` : '';
+                return `<span class="${classes.join(' ')}"${jobAttr}>${_escapeHtml(c)}</span>`;
             });
 
-            const citiesHtml = cityItems.length > 0 ? `<span class="block-context" title="Scheduled: ${uniqueCities.join(", ")}">${cityItems.join(", ")}</span>` : '';
+            const citiesHtml = cityItems.length > 0 ? `<span class="block-context" title="Scheduled: ${_escapeHtml(uniqueCities.join(", "))}">${cityItems.join(", ")}</span>` : '';
             // Other reps just see a held slot as unavailable (the count is reduced below) — no
             // "being booked by {rep}" badge, to keep their view uncluttered.
             const lockBadgesHtml = '';
@@ -4118,17 +4125,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 el.addEventListener('mouseenter', () => {
                     sendFindCommand({ type: 'HIGHLIGHT_CITY', city: el.textContent });
                 });
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const city = el.textContent;
-                    findInput.value = city;
-                    updateFindClearButton();
-                    pushFindUpdate(city);
-                });
             });
 
             grid.appendChild(div);
         }
+        grid.addEventListener('click', async (e) => {
+            const cityEl = e.target.closest('.city-hover');
+            if (!cityEl || !grid.contains(cityEl)) return;
+            e.stopPropagation();
+            const jobId = cityEl.dataset.jobId;
+            if (jobId) {
+                await chrome.tabs.create({
+                    url: `${ROOFR_JOB_CARD_URL_BASE}${encodeURIComponent(jobId)}`,
+                    active: true
+                });
+                return;
+            }
+            const city = cityEl.textContent;
+            findInput.value = city;
+            updateFindClearButton();
+            pushFindUpdate(city);
+        });
         body.appendChild(grid);
 
         // Footer inside body (shows when expanded)
@@ -12183,7 +12200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!jobId) return;
         try {
             const tab = await reportsV2GetRoofrTab();
-            await chrome.tabs.update(tab.id, { url: `https://app.roofr.com/dashboard/team/239329/jobs/list-view?selectedJobId=${jobId}`, active: true });
+            await chrome.tabs.update(tab.id, { url: `${ROOFR_JOB_CARD_URL_BASE}${encodeURIComponent(jobId)}`, active: true });
             try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (_) {}
         } catch (error) {
             reportsV2SetStatus(error.message, 'error');
@@ -12511,7 +12528,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             lane.status = 'opening';
             reportsV2RenderOrderPanel();
             try {
-                await chrome.tabs.update(lane.tabId, { url: `https://app.roofr.com/dashboard/team/239329/jobs/list-view?selectedJobId=${job.jobId}` });
+                await chrome.tabs.update(lane.tabId, { url: `${ROOFR_JOB_CARD_URL_BASE}${encodeURIComponent(job.jobId)}` });
             } catch (error) {
                 if (/No tab with id/i.test(error?.message || '')) {
                     lane.status = 'closed';
