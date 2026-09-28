@@ -487,6 +487,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // Handle incoming CTM call
     if (msg.type === "CTM_INCOMING_CALL") {
         const windowId = msg.windowId || (sender.tab ? sender.tab.windowId : null);
+        // The call list lags (and only checks while the CTM tab is visible),
+        // so it can report "answered by you" after you've transferred the
+        // caller away. When this browser's softphone is known and is NOT on a
+        // call, don't pop a job card for it.
+        if (msg.isAnswered && !msg.isOutbound && _softphoneSeenAt && Date.now() - _softphoneSeenAt < 4 * 3600 * 1000 && !_softphoneInCall) {
+            jobCardTrace('call-list-skip', { phone: msg.phoneNumber, agent: msg.agentName || null, why: 'softphone not on a call' });
+            return false;
+        }
         handleCtmIncomingCall(
             msg.phoneNumber,
             msg.formattedPhone,
@@ -820,6 +828,9 @@ function claimJobCardOpen(phoneNumber) {
 // for the call-list DOM to repaint.
 let _softphoneRing = null;   // { phone, name, windowId, at }
 let _softphonePickup = null; // answered, number not known yet — read from UI samples
+let _softphoneInCall = false;   // this rep's softphone is on a live (answered) call
+let _softphoneSeenAt = 0;       // last softphone event — 0 = no softphone known (SW restart / no embed)
+let _softphoneUiSamples = 0;    // trace the first few UI samples after ctm:start
 function softphoneOpenJobCard(phone, name, windowId) {
     handleCtmIncomingCall(phone, phone, false, name, windowId, null, true, false)
         .then(res => jobCardTrace('open-result', { phone, res }))
@@ -1997,7 +2008,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 _softphoneRing = { phone: who?.phone || null, name: who?.name || null, windowId: sender?.tab?.windowId ?? null, at: Date.now() };
                 _softphonePickup = null;
                 jobCardTrace('ring', { phone: _softphoneRing.phone, detail: msg.payload.detail });
-            } else if (ev === 'ctm:start' && _softphoneRing && Date.now() - _softphoneRing.at < 90000) {
+            } else if (ev === 'ctm:start') {
+                // NOT a pickup on inbound: it fires ~0.2s after the ring
+                // (channel up) — 9/28 trace opened a card for an unanswered
+                // ring. The pickup is the bridge's synthetic ctm:answered.
+                _softphoneUiSamples = 3;
+                _softphoneInCall = true;   // live channel — enough for the call-list gate
+                jobCardTrace('start', { ringing: !!_softphoneRing });
+            } else if (ev === 'ctm:answered' && _softphoneRing && Date.now() - _softphoneRing.at < 90000) {
+                _softphoneInCall = true;
                 const r = _softphoneRing;
                 _softphoneRing = null;
                 if (r.phone) {
@@ -2009,6 +2028,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     _softphonePickup = { ...r, at: Date.now() };
                     jobCardTrace('pickup', { phone: null, via: 'waiting-for-ui' });
                 }
+            } else if (ev === 'ctm:live-activity-sample' && _softphoneUiSamples > 0 && !_softphonePickup) {
+                _softphoneUiSamples--;
+                jobCardTrace('ui-sample', { ui: String(msg.payload.detail?.ui || '').slice(0, 200), answered: !!msg.payload.detail?.answered });
             } else if (ev === 'ctm:live-activity-sample' && _softphonePickup) {
                 const ui = String(msg.payload.detail?.ui || '');
                 const m = ui.match(/(?:\+?1[\s.-]?)?\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})(?!\d)/);
@@ -2021,10 +2043,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     jobCardTrace('pickup-ui-miss', { ui: ui.slice(0, 200) });
                     _softphonePickup = null;
                 }
-            } else if (ev === 'ctm:connecting' || ev === 'ctm:end-activity' || ev === 'ctm:failed') {
+            } else if (ev === 'ctm:answered') {
+                _softphoneInCall = true;
+            } else if (ev === 'ctm:connecting' || ev === 'ctm:end-activity' || ev === 'ctm:failed' || ev === 'ctm:wrapup_start') {
+                if (_softphoneRing || _softphoneInCall) jobCardTrace('end', { ev, ringing: !!_softphoneRing });
                 _softphoneRing = null;
                 _softphonePickup = null;
+                _softphoneInCall = false;
             }
+            _softphoneSeenAt = Date.now();
             if (ev === 'ctm:connecting' || ev === 'ctm:start') {
                 meetAutoMute();
             } else if (ev === 'ctm:end-activity' || ev === 'ctm:wrapup_start' || ev === 'ctm:failed') {

@@ -1,10 +1,11 @@
 {
-  "version": "3.2.80",
+  "version": "3.2.81",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T19:33:49.378Z",
+  "release_date": "2026-09-28T19:40:51.984Z",
   "changelog": [
-    "Call tab group holds only the caller's job cards — the CTM tab is no longer pulled into it"
+    "Job card waits for a real pickup (no pop while the call is still ringing)",
+    "No job card for a call you already transferred away"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.80/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.80"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.81/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.81"
 }
