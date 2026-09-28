@@ -8665,790 +8665,210 @@ document.addEventListener('DOMContentLoaded', async () => {
                             window.__selectedRoofrJob = null;
                             window.__selectedRoofrJobInputValue = null;
 
-                        // Fall back to DOM search if no known job selected
+                        // No known job picked — look it up (catalog, then live Roofr), else prep a New Job
                         } else if (!researchOnly && settings.search_roofr !== false) {
-                        // Extract street address for search, INCLUDING any unit/lot. Roofr's search indexes
-                        // the job NAME (verified live: searching "Vader" returns that job), and every unit in
-                        // a complex shares the SAME base address — so searching WITH the unit is what finds the
-                        // exact job (whose name carries the unit) and cleanly returns "No jobs found" for a new
-                        // unit, instead of pulling up a neighbor's job at the same shared address.
-                        const streetAddress = verifiedAddress.split(',')[0].trim();
-                        // Expand abbreviations for search: N -> North, Ln -> Lane, etc.
-                        const expandedStreetAddress = streetAddress
-                            // Directional prefixes
-                            .replace(/\bN\.?\s+/gi, 'North ')
-                            .replace(/\bS\.?\s+/gi, 'South ')
-                            .replace(/\bE\.?\s+/gi, 'East ')
-                            .replace(/\bW\.?\s+/gi, 'West ')
-                            .replace(/\bNE\.?\s+/gi, 'Northeast ')
-                            .replace(/\bNW\.?\s+/gi, 'Northwest ')
-                            .replace(/\bSE\.?\s+/gi, 'Southeast ')
-                            .replace(/\bSW\.?\s+/gi, 'Southwest ')
-                            // Street types (at end of street name)
-                            .replace(/\bLn\.?$/gi, 'Lane')
-                            .replace(/\bRd\.?$/gi, 'Road')
-                            .replace(/\bSt\.?$/gi, 'Street')
-                            .replace(/\bAve\.?$/gi, 'Avenue')
-                            .replace(/\bBlvd\.?$/gi, 'Boulevard')
-                            .replace(/\bDr\.?$/gi, 'Drive')
-                            .replace(/\bCt\.?$/gi, 'Court')
-                            .replace(/\bCir\.?$/gi, 'Circle')
-                            .replace(/\bPl\.?$/gi, 'Place')
-                            .replace(/\bPkwy\.?$/gi, 'Parkway')
-                            .replace(/\bHwy\.?$/gi, 'Highway')
-                            .replace(/\bWay\.?$/gi, 'Way')
-                            .replace(/\bTrl\.?$/gi, 'Trail')
-                            .replace(/\bTer\.?$/gi, 'Terrace')
-                            .replace(/\bLoop\.?$/gi, 'Loop')
-                            .replace(/\bPass\.?$/gi, 'Pass')
-                            .replace(/\bAlley\.?$/gi, 'Alley')
-                            .replace(/\bAly\.?$/gi, 'Alley');
-
-                        // Roofr's job search is a CONTIGUOUS-substring match (verified live): a multi-word term
-                        // must appear verbatim in the stored address. Geocoders routinely drop or reformat the
-                        // directional ("1310 Lesueur" vs the stored "1310 North Lesueur", or "N" vs "North"), so
-                        // searching the full street MISSES existing jobs and creates duplicates. The house NUMBER
-                        // is always a contiguous token that reliably returns the job; the precise row-matcher
-                        // (house# + street word + unit) then picks the exact one. Fall back to the full street
-                        // only if there's no house number.
-                        const _houseNumberForSearch = (streetAddress.match(/\b\d{1,6}\b/) || [])[0] || '';
-                        const roofrSearchTerm = _houseNumberForSearch || expandedStreetAddress;
-
-                        // Build search URL - navigate to base list view (will inject search via content script)
-                        const roofrSearchUrl = 'https://app.roofr.com/dashboard/team/239329/jobs/list-view';
-                        const roofrJobsUrl = 'https://app.roofr.com/dashboard/team/239329/jobs';
-                        addLog(`Searching Roofr for: ${roofrSearchTerm} (full address: ${verifiedAddress})`);
-
-                        let jobsNeedsPageLoad = false;
-
-                        // Always create a new tab for the search
-                        jobsTab = await chrome.tabs.create({ url: roofrSearchUrl, active: false, windowId: currentWindowId });
-                        jobsNeedsPageLoad = true;
-                        addLog(`Created Roofr search tab (ID: ${jobsTab.id})`);
-
-                        // Store the original address for job creation fallback
-                        const originalAddress = verifiedAddress;
-
-                        // Wait for page to load, then inject search into the search bar
-                        if (jobsNeedsPageLoad) {
-                            chrome.tabs.onUpdated.addListener(function jobsListener(tabId, info) {
-                                if (tabId === jobsTab.id && info.status === 'complete') {
-                                    chrome.tabs.onUpdated.removeListener(jobsListener);
-
-                                    // Add extra delay to ensure React has fully rendered
-                                    setTimeout(() => {
-                                        // Inject the address into the search bar with retry logic
-                                        addLog(`Injecting job search: ${roofrSearchTerm}`);
-
-                                        const attemptInjection = (attemptNum) => {
-                                            if (attemptNum > 3) {
-                                                addLog(`Failed to inject search after 3 attempts`, 'ERROR');
-                                                return;
-                                            }
-
-                                            chrome.tabs.sendMessage(jobsTab.id, {
-                                                type: 'INJECT_JOB_SEARCH',
-                                                address: roofrSearchTerm
-                                            }).then(result => {
-                                                if (result && result.ok) {
-                                                    addLog(`Job search injected successfully (attempt ${attemptNum})`);
-                                                    // Wait for search results to load, then check results
-                                                    setTimeout(() => handleSearchResults(jobsTab.id, originalAddress, roofrJobsUrl), 4000);
-                                                } else {
-                                                    addLog(`Injection attempt ${attemptNum} failed: ${result?.error || 'unknown'}, retrying...`);
-                                                    setTimeout(() => attemptInjection(attemptNum + 1), 1000);
-                                                }
-                                            }).catch(err => {
-                                                addLog(`Error on attempt ${attemptNum}: ${err.message}, retrying...`);
-                                                setTimeout(() => attemptInjection(attemptNum + 1), 1000);
-                                            });
-                                        };
-
-                                        attemptInjection(1);
-                                    }, 1000); // Wait 1 extra second after page complete
-                                }
+                        // Roofr: open the existing job card, or get a New Job ready with the address SELECTED.
+                        //  1. Catalog (roofr-search, already cached in the popup) — instant, no search tab. Skipped
+                        //     for lot/unit addresses: every unit shares one base address and the unit lives only in
+                        //     the job NAME, which the catalog doesn't carry.
+                        //  2. Live Roofr API inside the Roofr tab (/api/jobs?filter[q]= — the same call Roofr's own
+                        //     search box makes) — catches jobs created since the catalog loaded, and unit jobs.
+                        //  3. No match -> New > Job, type the address the way a keystroke would (react-places-autocomplete
+                        //     ignores a plain .value write, which is why reps had to add/delete a character), then
+                        //     click the matching suggestion so Continue is enabled and Job name appears.
+                        const _UNIT_RE = /(?:#|\b(?:unit|apt|apartment|ste|suite|spc|space|bldg|building|lot|trlr|trailer|rm|room)\s*#?)\s*([a-z0-9-]+)\s*$/i;
+                        const _STREET_TYPES = new Set(['st','street','ave','avenue','blvd','boulevard','rd','road','dr','drive','ln','lane','ct','court','pl','place','pkwy','parkway','cir','circle','trl','trail','ter','terrace','way','loop','pass','hwy','highway','aly','alley','pt','point','sq','square','xing','crossing']);
+                        const _DIRS = { north: 'n', south: 's', east: 'e', west: 'w', northeast: 'ne', northwest: 'nw', southeast: 'se', southwest: 'sw' };
+                        const _addrParts = (addr) => {
+                            const segs = String(addr || '').split(',').map(s => s.trim());
+                            const street = (segs[0] || '').replace(_UNIT_RE, '').trim();
+                            const key = street.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean)
+                                .map(t => _DIRS[t] || t).filter(t => !_STREET_TYPES.has(t)).join(' ');
+                            return { key, city: (segs[1] || '').toLowerCase(), hasUnit: _UNIT_RE.test(segs[0] || '') };
+                        };
+                        const findCatalogJob = async (addr) => {
+                            const q = _addrParts(addr);
+                            if (!q.key || q.hasUnit || !/^\d/.test(q.key)) return null;
+                            const rows = await fetchRoofrData().catch(() => []);
+                            const hits = (rows || []).filter(job => {
+                                if (!job.Link) return false;
+                                const c = _addrParts(job.Address);
+                                return c.key === q.key && (!q.city || !c.city || c.city === q.city);
                             });
-                        }
+                            hits.sort((a, b) => String(b['Created at'] || '').localeCompare(String(a['Created at'] || '')));
+                            return hits[0] || null;
+                        };
+                        const waitTabComplete = (tabId, timeoutMs = 30000) => new Promise(resolve => {
+                            let done = false;
+                            const finish = () => { if (done) return; done = true; chrome.tabs.onUpdated.removeListener(onUpd); clearTimeout(timer); resolve(); };
+                            const onUpd = (id, info, tab) => { if (id === tabId && info.status === 'complete' && tab?.url?.includes('app.roofr.com')) finish(); };
+                            const timer = setTimeout(finish, timeoutMs);
+                            chrome.tabs.onUpdated.addListener(onUpd);
+                        });
 
-                        // Function to check search results and either click the first result or create new job
-                        const handleSearchResults = (tabId, address, jobsUrl) => {
-                            addLog(`Checking search results on tab ${tabId}`);
-                            chrome.scripting.executeScript({
-                                target: { tabId: tabId },
-                                func: (address, jobsUrl) => {
-                                    console.log('[Roofr Extension] Checking search results for:', address);
+                        const catalogJob = await findCatalogJob(verifiedAddress);
+                        if (catalogJob) {
+                            jobsTab = await chrome.tabs.create({ url: catalogJob.Link, active: false, windowId: currentWindowId });
+                            addLog(`Roofr: existing job found in catalog — ${catalogJob.Customer || ''} (${catalogJob.Address}) — opened job card`);
+                        } else {
+                            const roofrListUrl = 'https://app.roofr.com/dashboard/team/239329/jobs/list-view';
+                            jobsTab = await chrome.tabs.create({ url: roofrListUrl, active: false, windowId: currentWindowId });
+                            addLog(`Roofr: not in catalog — checking Roofr live for ${verifiedAddress}`);
+                            const _roofrTabId = jobsTab.id;
+                            waitTabComplete(_roofrTabId).then(() => chrome.scripting.executeScript({
+                                target: { tabId: _roofrTabId },
+                                args: [verifiedAddress, '239329'],
+                                func: async (address, teamId) => {
+                                    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+                                    const waitFor = async (fn, timeout = 8000, step = 150) => {
+                                        const end = Date.now() + timeout;
+                                        while (Date.now() < end) { try { const v = fn(); if (v) return v; } catch (e) { /* retry */ } await sleep(step); }
+                                        return null;
+                                    };
+                                    const UNIT_RE = /(?:#|\b(?:unit|apt|apartment|ste|suite|spc|space|bldg|building|lot|trlr|trailer|rm|room)\s*#?)\s*([a-z0-9-]+)\s*$/i;
+                                    const DIRS = { north: 'n', south: 's', east: 'e', west: 'w', northeast: 'ne', northwest: 'nw', southeast: 'se', southwest: 'sw', n: 'n', s: 's', e: 'e', w: 'w', ne: 'ne', nw: 'nw', se: 'se', sw: 'sw' };
+                                    const STOP = new Set(['north','south','east','west','northeast','northwest','southeast','southwest','avenue','ave','street','st','drive','dr','road','rd','lane','ln','court','ct','place','pl','boulevard','blvd','circle','cir','trail','trl','way','terrace','ter','parkway','pkwy','highway','hwy','loop','pass','point','pt']);
 
-                                    // Derive the house number + a distinctive street word so we ONLY open a
-                                    // row that actually matches the searched address. Roofr's search bar
-                                    // sometimes fails to filter (or the inject hits the wrong field); without
-                                    // this we'd open whatever job sits on top — an unrelated job card.
-                                    const _addrLc = String(address || '').toLowerCase();
-                                    const _houseNum = (_addrLc.match(/\b(\d{1,6})\b/) || [])[1] || '';
-                                    const _streetWord = (() => {
-                                        const seg = _addrLc.split(',')[0]
-                                            .replace(/\s*(?:#|\b(?:unit|apt|apartment|ste|suite|spc|space|bldg|building|lot|trlr|trailer|rm|room)\s*#?)\s*[a-z0-9-]+\s*$/i, '');
-                                        const stop = new Set(['north','south','east','west','northeast','northwest','southeast','southwest','avenue','ave','street','st','drive','dr','road','rd','lane','ln','court','ct','place','pl','boulevard','blvd','circle','cir','trail','trl','way','terrace','ter','parkway','pkwy','highway','hwy','loop','pass','point','pt']);
-                                        const words = seg.replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !stop.has(w));
-                                        return words.sort((a, b) => b.length - a.length)[0] || '';
-                                    })();
-                                    // Roofr stores EVERY unit in a complex under the same base address — the
-                                    // unit/lot lives ONLY in the job NAME column. So when the searched address
-                                    // has a unit, a row matches only if its NAME cell carries that same unit;
-                                    // the shared address alone must NOT count as a hit (it'd open a neighbor's job).
-                                    const _unitM = _addrLc.split(',')[0].match(/(?:#|\b(?:unit|apt|apartment|ste|suite|spc|space|bldg|building|lot|trlr|trailer|rm|room)\s*#?)\s*([a-z0-9-]+)\s*$/i);
-                                    const _unitNum = _unitM ? _unitM[1].replace(/[^a-z0-9]/gi, '').replace(/^0+/, '') : '';
-                                    const _cell = (row, col) => { const c = row.querySelector('[col-id="' + col + '"]'); return c ? (c.textContent || '').toLowerCase() : ''; };
-                                    const _addrMatches = (el) => {
-                                        const a = _cell(el, 'address') || (el.textContent || '').toLowerCase();
-                                        if (_houseNum && !a.includes(_houseNum)) return false;
-                                        if (_streetWord && !a.includes(_streetWord)) return false;
-                                        return !!(_houseNum || _streetWord);
-                                    };
-                                    const _unitMatches = (el) => {
-                                        if (!_unitNum) return true; // no unit to disambiguate
-                                        const hay = (_cell(el, 'name') || el.textContent || '').toLowerCase();
-                                        return new RegExp('(?:#|\\b(?:unit|apt|apartment|ste|suite|spc|space|bldg|building|lot|trlr|trailer|rm|room)\\s*#?)\\s*0*' + _unitNum + '\\b', 'i').test(hay);
-                                    };
-                                    // Only the center/data rows (the pinned-right container holds a duplicate row with the View button).
-                                    const _dataRows = () => Array.from(document.querySelectorAll('.ag-row:not(.ag-header-row), table tbody tr')).filter(r => !r.closest('.ag-pinned-right-cols-container'));
-                                    const findMatchingRow = () => { for (const r of _dataRows()) { if (_addrMatches(r) && _unitMatches(r)) return r; } return null; };
-                                    const hasBaseAddressRow = () => _dataRows().some(r => _addrMatches(r));
-                                    const clickRow = (row) => {
-                                        if (!row) return false;
-                                        // The "View" button lives in a sibling pinned-right .ag-row that shares row-id (= job id).
-                                        const rid = row.getAttribute('row-id');
-                                        const ridx = row.getAttribute('row-index');
-                                        let scope = [row];
-                                        if (rid != null) scope = Array.from(document.querySelectorAll('.ag-row[row-id="' + rid + '"]'));
-                                        else if (ridx != null) scope = Array.from(document.querySelectorAll('.ag-row[row-index="' + ridx + '"]'));
-                                        for (const r of scope) {
-                                            for (const b of r.querySelectorAll('button, a, [role="button"]')) {
-                                                const tx = b.textContent?.trim();
-                                                if (tx === 'View' || (tx && tx.includes('View'))) { b.click(); return true; }
-                                            }
-                                        }
-                                        (row.querySelector('[role="gridcell"], .ag-cell') || row).click();
+                                    const segs = String(address || '').split(',').map(s => s.trim());
+                                    const street = segs[0] || '';
+                                    const unitM = street.match(UNIT_RE);
+                                    const unitLabel = unitM ? unitM[0].replace(/\s+/g, ' ').trim() : '';
+                                    const unitNum = unitM ? unitM[1].replace(/[^a-z0-9]/gi, '').replace(/^0+/, '').toLowerCase() : '';
+                                    const baseStreet = unitM ? street.slice(0, unitM.index).trim() : street;
+                                    const city = (segs[1] || '').toLowerCase();
+                                    const houseNum = (baseStreet.match(/\b(\d{1,6})\b/) || [])[1] || '';
+                                    const tokens = baseStreet.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+                                    const streetWord = tokens.filter(t => t !== houseNum && /[a-z]/.test(t) && t.length >= 3 && !STOP.has(t))
+                                        .sort((a, b) => b.length - a.length)[0] || '';
+                                    const dirAfterNum = (toks) => { const i = toks.indexOf(houseNum); return i >= 0 && DIRS[toks[i + 1]] ? DIRS[toks[i + 1]] : ''; };
+                                    const qDir = dirAfterNum(tokens);
+                                    const unitInName = (txt) => new RegExp('(?:#|\\b(?:unit|apt|apartment|ste|suite|spc|space|bldg|building|lot|trlr|trailer|rm|room)\\s*#?)\\s*0*' + unitNum + '\\b', 'i').test(txt);
+
+                                    const jobMatches = (j) => {
+                                        const a = j.address || {};
+                                        const fa = String(a.formatted_address || a.address || '').toLowerCase();
+                                        if (!fa || !(houseNum || streetWord)) return false;
+                                        if (houseNum && (a.street_number ? String(a.street_number) !== houseNum : !new RegExp('\\b' + houseNum + '\\b').test(fa))) return false;
+                                        if (streetWord && !fa.includes(streetWord)) return false;
+                                        const cDir = dirAfterNum(fa.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/));
+                                        if (qDir && cDir && qDir !== cDir) return false;
+                                        if (unitNum && !unitInName(`${j.name || ''} ${a.address_line_2 || ''}`)) return false;
                                         return true;
                                     };
 
-                                    // Function to count job rows in the list view
-                                    const countJobRows = () => {
-                                        // Primary: AG Grid data rows (current Roofr UI)
-                                        const agRows = document.querySelectorAll('.ag-row:not(.ag-header-row)');
-                                        if (agRows.length > 0) {
-                                            console.log('[Roofr Extension] Found', agRows.length, 'AG Grid data rows');
-                                            return agRows.length;
+                                    // --- 1. Live lookup: the same endpoint Roofr's own "Search jobs" box calls ---
+                                    const headers = { 'team-id': String(teamId), accept: 'application/json' };
+                                    let apiError = null;
+                                    const matches = new Map();
+                                    for (const term of [streetWord, houseNum].filter(Boolean)) {
+                                        for (let page = 1; page <= 3; page++) {
+                                            let data;
+                                            try {
+                                                const r = await fetch(`/api/jobs?page=${page}&per_page=100&filter[q]=${encodeURIComponent(term)}`, { credentials: 'include', headers });
+                                                if (!r.ok) { apiError = `HTTP ${r.status}`; break; }
+                                                data = (await r.json()).data || [];
+                                            } catch (e) { apiError = e.message; break; }
+                                            data.filter(jobMatches).forEach(j => matches.set(j.id, j));
+                                            if (data.length < 100) break;
                                         }
-
-                                        // Fallback: Look for table rows (legacy)
-                                        const tableRows = document.querySelectorAll('table tbody tr');
-                                        if (tableRows.length > 0) {
-                                            console.log('[Roofr Extension] Found', tableRows.length, 'table rows');
-                                            return tableRows.length;
-                                        }
-
-                                        // Fallback: Count View buttons as proxy for job rows
-                                        const viewBtns = Array.from(document.querySelectorAll('button, a')).filter(b => b.textContent?.trim() === 'View');
-                                        if (viewBtns.length > 0) {
-                                            console.log('[Roofr Extension] Found', viewBtns.length, 'View buttons');
-                                            return viewBtns.length;
-                                        }
-
-                                        return 0;
-                                    };
-
-                                    // Function to click the View button on the first job row
-                                    const clickFirstJobRow = () => {
-                                        // Priority 1: Find View button in the first AG Grid data row
-                                        const firstAgRow = document.querySelector('.ag-row:not(.ag-header-row)');
-                                        if (firstAgRow) {
-                                            const buttons = firstAgRow.querySelectorAll('button, a, [role="button"]');
-                                            for (const btn of buttons) {
-                                                const text = btn.textContent?.trim();
-                                                if (text === 'View' || text?.includes('View')) {
-                                                    console.log('[Roofr Extension] Clicking View button in AG Grid row:', text);
-                                                    btn.click();
-                                                    return true;
-                                                }
-                                            }
-                                            // If no View button, try clicking the row itself
-                                            console.log('[Roofr Extension] No View button in AG row, clicking row');
-                                            firstAgRow.click();
-                                            return true;
-                                        }
-
-                                        // Priority 2: Find View button in a table row (legacy)
-                                        const firstTableRow = document.querySelector('table tbody tr:first-child');
-                                        if (firstTableRow) {
-                                            const buttons = firstTableRow.querySelectorAll('button, a, [role="button"]');
-                                            for (const btn of buttons) {
-                                                if (btn.textContent?.trim() === 'View') {
-                                                    console.log('[Roofr Extension] Clicking View button in table row');
-                                                    btn.click();
-                                                    return true;
-                                                }
-                                            }
-                                        }
-
-                                        // Priority 3: Find any View button on the page
-                                        const allViewButtons = document.querySelectorAll('button, a, [role="button"]');
-                                        for (const btn of allViewButtons) {
-                                            if (btn.textContent?.trim() === 'View') {
-                                                console.log('[Roofr Extension] Clicking standalone View button');
-                                                btn.click();
-                                                return true;
-                                            }
-                                        }
-
-                                        return false;
-                                    };
-
-                                    // Function to check for "no results" state
-                                    const hasNoResults = () => {
-                                        // Check for AG Grid overlay (no rows)
-                                        const agOverlay = document.querySelector('.ag-overlay-no-rows-wrapper, .ag-overlay');
-                                        if (agOverlay && agOverlay.offsetParent !== null) {
-                                            console.log('[Roofr Extension] Found AG Grid no-rows overlay');
-                                            return true;
-                                        }
-
-                                        // Check for zero AG Grid data rows (most reliable)
-                                        const agRows = document.querySelectorAll('.ag-row:not(.ag-header-row)');
-                                        if (agRows.length === 0) {
-                                            console.log('[Roofr Extension] Zero AG Grid data rows');
-                                            return true;
-                                        }
-
-                                        // Check for specific Roofr "no results" elements
-                                        const noSearchResults = document.querySelector('.no-search-results, [class*="no-search-results"]');
-                                        if (noSearchResults) {
-                                            console.log('[Roofr Extension] Found no-search-results element');
-                                            return true;
-                                        }
-
-                                        // Check for empty state indicators
-                                        const emptySelectors = [
-                                            '[class*="no-results"]',
-                                            '[class*="empty-state"]',
-                                            '[class*="no-data"]'
-                                        ];
-
-                                        for (const selector of emptySelectors) {
-                                            const el = document.querySelector(selector);
-                                            if (el && el.offsetParent !== null) {
-                                                console.log('[Roofr Extension] Found empty state:', selector);
-                                                return true;
-                                            }
-                                        }
-
-                                        // Check for "No jobs found" or similar text
-                                        const pageText = document.body.innerText.toLowerCase();
-                                        if (pageText.includes('no results matched') ||
-                                            pageText.includes('0 results') ||
-                                            pageText.includes('no jobs found') ||
-                                            pageText.includes('no results found') ||
-                                            pageText.includes('try adjusting your search')) {
-                                            console.log('[Roofr Extension] Found "no results" text');
-                                            return true;
-                                        }
-
-                                        return false;
-                                    };
-
-                                    // Function to create new job (click New > Job > fill address)
-                                    const createNewJobOnPage = () => {
-                                        console.log('[Roofr Extension] Creating new job - clicking New button');
-
-                                        // Step 1: Click the "New" button
-                                        const newButton = document.querySelector('button.jobs-entry-board-do-it-all-button, button[class*="do-it-all-button"]');
-                                        if (!newButton) {
-                                            // Try finding by text
-                                            const allButtons = document.querySelectorAll('button');
-                                            for (const btn of allButtons) {
-                                                if (btn.textContent?.includes('New')) {
-                                                    btn.click();
-                                                    console.log('[Roofr Extension] Clicked New button (by text)');
-                                                    return true;
-                                                }
-                                            }
-                                            console.log('[Roofr Extension] New button not found');
-                                            return false;
-                                        }
-                                        newButton.click();
-                                        console.log('[Roofr Extension] Clicked New button');
-                                        return true;
-                                    };
-
-                                    // Step 2: Click Job option (called after New dropdown opens)
-                                    const clickJobOption = () => {
-                                        const jobButton = document.querySelector('button[data-testid="job-board-do-it-all-dropdown-item-job"]');
-                                        if (jobButton) {
-                                            jobButton.click();
-                                            console.log('[Roofr Extension] Clicked Job option');
-                                            return true;
-                                        }
-                                        // Fallback: find by text
-                                        const buttons = document.querySelectorAll('button');
-                                        for (const btn of buttons) {
-                                            const text = btn.textContent?.trim();
-                                            if (text?.startsWith('Job') && text?.includes('create a card')) {
-                                                btn.click();
-                                                console.log('[Roofr Extension] Clicked Job option (by text)');
-                                                return true;
-                                            }
-                                        }
-                                        return false;
-                                    };
-
-                                    // Step 3: Fill address in modal
-                                    const fillAddressInModal = (addr) => {
-                                        const addressInput = document.querySelector('input[data-testid="create-job-address-input"], input[id*="address-resolution-input"], input[placeholder="Enter address and select"]');
-                                        if (addressInput) {
-                                            addressInput.focus();
-                                            addressInput.value = addr;
-                                            addressInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                            addressInput.dispatchEvent(new Event('change', { bubbles: true }));
-                                            console.log('[Roofr Extension] Filled address:', addr);
-                                            return true;
-                                        }
-                                        return false;
-                                    };
-
-                                    // --- Mirror lot/unit into the Job name (Roofr drops it from the address) ---
-                                    const extractUnit = (addr) => {
-                                        const seg = String(addr || '').split(',')[0];
-                                        const m = seg.match(/(#\s*[A-Za-z0-9-]+|\b(?:unit|apt|apartment|ste|suite|spc|space|bldg|building|lot|trlr|trailer|rm|room)\s*#?\s*[A-Za-z0-9-]+)\s*$/i);
-                                        return m ? m[1].replace(/\s+/g, ' ').trim() : '';
-                                    };
-                                    const setReactValue = (el, val) => {
-                                        const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-                                        const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-                                        setter.call(el, val);
-                                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                                    };
-                                    const fillJobName = () => {
-                                        const unit = extractUnit(address);
-                                        if (!unit) return true; // no unit/lot — nothing to add
-                                        let nameInput = null;
-                                        const opt = document.querySelector('input[data-testid="create-job-name-input"], input[placeholder="Optional"]');
-                                        if (opt && opt.offsetParent !== null) nameInput = opt;
-                                        if (!nameInput) {
-                                            for (const lb of document.querySelectorAll('label')) {
-                                                if (lb.textContent && lb.textContent.trim().toLowerCase() === 'job name') {
-                                                    const grp = lb.closest('.form-group, [class*="form-group"], div');
-                                                    const cand = grp && grp.querySelector('input:not([role="combobox"])');
-                                                    if (cand && cand.offsetParent !== null) { nameInput = cand; break; }
-                                                }
-                                            }
-                                        }
-                                        if (!nameInput) return false;
-                                        if (nameInput.value && nameInput.value.trim()) return true; // never clobber a typed name
-                                        nameInput.focus();
-                                        setReactValue(nameInput, unit);
-                                        console.log('[Roofr Extension] Filled Job name with unit/lot:', unit);
-                                        return true;
-                                    };
-                                    const tryFillJobName = (a = 1) => { if (fillJobName()) return; if (a < 8) setTimeout(() => tryFillJobName(a + 1), 400); };
-
-                                    // Check results with retries (page may still be loading)
-                                    let attempts = 0;
-                                    const maxAttempts = 20;
-
-                                    const checkAndAct = () => {
-                                        attempts++;
-                                        console.log(`[Roofr Extension] Attempt ${attempts}/${maxAttempts} to check search results`);
-
-                                        const jobCount = countJobRows();
-                                        const noResults = hasNoResults();
-
-                                        console.log(`[Roofr Extension] Found ${jobCount} job rows, noResults: ${noResults}`);
-
-                                        // Only open a row that ACTUALLY matches the searched address — never
-                                        // blindly open the top row (if the search didn't filter we'd open an
-                                        // unrelated job, e.g. opening "Vader / Hatcher Rd" for a Peoria search).
-                                        const matchRow = findMatchingRow();
-                                        if (matchRow) {
-                                            console.log('[Roofr Extension] Row matches searched address - opening it');
-                                            if (clickRow(matchRow)) {
-                                                return { action: 'clicked_result', count: jobCount };
-                                            }
-                                        }
-
-                                        if (noResults || attempts >= maxAttempts) {
-                                            // No results found - create new job directly on this page
-                                            console.log('[Roofr Extension] No results found - creating new job');
-
-                                            // Click New button
-                                            if (createNewJobOnPage()) {
-                                                // Wait for dropdown, then click Job
-                                                setTimeout(() => {
-                                                    if (clickJobOption()) {
-                                                        // Wait for modal, then fill address
-                                                        setTimeout(() => {
-                                                            fillAddressInModal(address);
-                                                            tryFillJobName();
-                                                        }, 1500);
-                                                    }
-                                                }, 1000);
-                                            }
-                                            return { action: 'no_results', createNew: true };
-                                        }
-
-                                        if (attempts < maxAttempts) {
-                                            // Still loading, retry
-                                            setTimeout(checkAndAct, 500);
-                                            return null;
-                                        }
-
-                                        return { action: 'timeout' };
-                                    };
-
-                                    // Start checking after a brief delay for page to render
-                                    setTimeout(checkAndAct, 2000);
-                                },
-                                args: [address, jobsUrl]
-                            }).then((results) => {
-                                if (results && results[0] && results[0].result) {
-                                    const result = results[0].result;
-                                    if (result.action === 'clicked_result') {
-                                        addLog(`Found existing job (${result.count}) - opened it`);
-                                        // STOP - job found and clicked, nothing more to do
-                                    } else if (result.action === 'no_results') {
-                                        addLog(`No existing job found - creating new (New > Job > Address)`);
-                                        // Job creation handled directly in the injected script
+                                        if (matches.size || apiError) break;
                                     }
+
+                                    if (matches.size) {
+                                        const best = [...matches.values()].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0];
+                                        location.assign(`/dashboard/team/${teamId}/jobs/list-view?selectedJobId=${best.id}`);
+                                        return { action: 'opened', id: best.id, address: best.address?.formatted_address || '', count: matches.size };
+                                    }
+                                    if (apiError) {
+                                        // Can't prove the job is new — don't risk a duplicate. Put the search in Roofr's box for the rep.
+                                        const box = await waitFor(() => document.querySelector('input[placeholder="Search jobs"]'), 8000);
+                                        if (box) {
+                                            box.focus();
+                                            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(box, houseNum || baseStreet);
+                                            box.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: (houseNum || baseStreet).slice(-1) }));
+                                        }
+                                        return { action: 'api_error', error: apiError };
+                                    }
+
+                                    // --- 2. New > Job ---
+                                    const findNewBtn = () => document.querySelector('button.jobs-entry-board-do-it-all-button, button[class*="do-it-all-button"]')
+                                        || [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'New');
+                                    const newBtn = await waitFor(findNewBtn, 10000);
+                                    if (!newBtn) return { action: 'error', error: 'New button not found' };
+                                    const JOB_ITEM = 'button[data-testid="job-board-do-it-all-dropdown-item-job"]';
+                                    newBtn.click();
+                                    let jobBtn = await waitFor(() => document.querySelector(JOB_ITEM), 3000);
+                                    if (!jobBtn) { findNewBtn()?.click(); jobBtn = await waitFor(() => document.querySelector(JOB_ITEM), 4000); }
+                                    if (!jobBtn) return { action: 'error', error: 'New > Job option not found' };
+                                    jobBtn.click();
+
+                                    const input = await waitFor(() => {
+                                        const el = document.querySelector('input[data-testid="create-job-address-input"], input[placeholder="Enter address and select"]');
+                                        return el && el.offsetParent !== null ? el : null;
+                                    }, 8000);
+                                    if (!input) return { action: 'error', error: 'New Job address field not found' };
+
+                                    // --- 3. Type like a keystroke so Google Places fetches suggestions, then select the right one ---
+                                    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                                    const typed = [baseStreet, ...segs.slice(1)].filter(Boolean).join(', ');
+                                    const typeAddress = async () => {
+                                        input.focus();
+                                        setter.call(input, typed.slice(0, -1));
+                                        input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: typed.slice(-2, -1) }));
+                                        await sleep(150);
+                                        setter.call(input, typed);
+                                        input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: typed.slice(-1) }));
+                                    };
+                                    const OPT = '[id^="PlacesAutocomplete__suggestion-"][role="option"]';
+                                    await typeAddress();
+                                    let opts = await waitFor(() => { const o = [...document.querySelectorAll(OPT)]; return o.length ? o : null; }, 5000);
+                                    if (!opts) { await typeAddress(); opts = await waitFor(() => { const o = [...document.querySelectorAll(OPT)]; return o.length ? o : null; }, 5000); }
+                                    if (!opts) return { action: 'prefilled_no_suggestions' };
+
+                                    const scoreOpt = (o) => {
+                                        const t = o.textContent.toLowerCase();
+                                        let s = 0;
+                                        if (houseNum && new RegExp('\\b' + houseNum + '\\b').test(t)) s += 2;
+                                        if (streetWord && t.includes(streetWord)) s += 2;
+                                        if (city && t.includes(city)) s += 1;
+                                        const oDir = dirAfterNum(t.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/));
+                                        if (qDir && oDir && qDir !== oDir) s -= 5;
+                                        if (t.startsWith(baseStreet.toLowerCase() + ',')) s += 1; // "…Circle" over "…Circle North"
+                                        return s;
+                                    };
+                                    const best = opts.map(o => ({ o, s: scoreOpt(o) })).sort((a, b) => b.s - a.s)[0];
+                                    // House # + street required; city too when we have one (Google also offers out-of-state twins).
+                                    if (!best || best.s < (city ? 5 : 4)) return { action: 'prefilled_needs_pick', top: best?.o.textContent.trim() || '' };
+                                    const fire = (type) => best.o.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window, button: 0 }));
+                                    fire('mousedown'); fire('mouseup'); fire('click');
+                                    const picked = best.o.textContent.trim();
+
+                                    // Lot/unit -> Job name (Roofr drops it from the address). The field appears once an address is picked.
+                                    if (unitLabel) {
+                                        const nameInput = await waitFor(() => {
+                                            const el = document.querySelector('input[data-testid="create-job-name-input"], input[placeholder="Optional"]');
+                                            return el && el.offsetParent !== null ? el : null;
+                                        }, 4000);
+                                        if (nameInput && !nameInput.value.trim()) {
+                                            nameInput.focus();
+                                            setter.call(nameInput, unitLabel);
+                                            nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                            nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                        }
+                                    }
+                                    const cont = await waitFor(() => { const b = document.querySelector('[data-testid="create-job-continue-button"]'); return b && !b.disabled ? b : null; }, 3000);
+                                    return { action: 'prefilled', picked, ready: !!cont, unit: unitLabel };
                                 }
-                            }).catch(err => {
-                                addLog(`Error checking search results: ${err.message}`, 'ERROR');
-                            });
-                        };
-
-                        // Function to click New button, then Job, then fill address (used as fallback)
-                        const createNewJob = (tabId, address) => {
-                            addLog(`Creating new job on Roofr Jobs tab ${tabId}`);
-                            chrome.scripting.executeScript({
-                                target: { tabId: tabId },
-                                func: (address) => {
-                                    console.log('[Roofr Extension] Starting job creation for:', address);
-
-                                    // Step 1: Click the "New" button (with retry logic)
-                                    const clickNewButton = () => {
-                                        // Log all buttons on the page for debugging
-                                        const allBtns = document.querySelectorAll('button');
-                                        console.log('[Roofr Extension] Found', allBtns.length, 'buttons on page');
-                                        allBtns.forEach((btn, i) => {
-                                            if (btn.textContent.trim()) {
-                                                console.log(`[Roofr Extension] Button ${i}: "${btn.textContent.trim().substring(0, 50)}" class="${btn.className}"`);
-                                            }
-                                        });
-
-                                        // Look for the New button - try multiple selectors
-                                        const newBtnSelectors = [
-                                            'button.roofr-button.jobs-entry-board-do-it-all-button',
-                                            'button[class*="jobs-entry-board-do-it-all-button"]',
-                                            'button[class*="do-it-all"]',
-                                            'button[class*="roofr-button"]'
-                                        ];
-
-                                        for (const selector of newBtnSelectors) {
-                                            const buttons = document.querySelectorAll(selector);
-                                            for (const btn of buttons) {
-                                                if (btn.textContent.includes('New')) {
-                                                    console.log('[Roofr Extension] Found New button via selector:', selector);
-                                                    btn.click();
-                                                    return true;
-                                                }
-                                            }
-                                        }
-
-                                        // Fallback: find any button with "New" text
-                                        for (const btn of allBtns) {
-                                            const text = btn.textContent.trim();
-                                            if (text === 'New' || text.startsWith('New')) {
-                                                console.log('[Roofr Extension] Found New button (fallback), text:', text);
-                                                btn.click();
-                                                return true;
-                                            }
-                                        }
-                                        console.log('[Roofr Extension] New button not found');
-                                        return false;
-                                    };
-
-                                    // Step 2: Click the "Job" option in the dropdown
-                                    const clickJobOption = () => {
-                                        // Primary: Use the exact data-testid selector from the DOM
-                                        const jobBtn = document.querySelector('button[data-testid="job-board-do-it-all-dropdown-item-job"]');
-                                        if (jobBtn) {
-                                            console.log('[Roofr Extension] Found Job button via data-testid');
-                                            jobBtn.click();
-                                            return true;
-                                        }
-
-                                        // Secondary: Look for button with the specific class pattern
-                                        const classSelectors = [
-                                            'button.jobs-entry-board-do-it-all-list-item',
-                                            'button[class*="do-it-all-list-item"]',
-                                            'button[class*="dropdown-item-job"]'
-                                        ];
-
-                                        for (const selector of classSelectors) {
-                                            const buttons = document.querySelectorAll(selector);
-                                            for (const btn of buttons) {
-                                                const text = btn.textContent?.trim();
-                                                // The button has "Job This will create a card on the CRM board"
-                                                if (text && text.startsWith('Job')) {
-                                                    console.log('[Roofr Extension] Found Job button via class:', text.substring(0, 50));
-                                                    btn.click();
-                                                    return true;
-                                                }
-                                            }
-                                        }
-
-                                        // Tertiary: Look for any button with "create a card" text (unique to Job option)
-                                        const allButtons = document.querySelectorAll('button');
-                                        for (const btn of allButtons) {
-                                            const text = btn.textContent?.trim();
-                                            const rect = btn.getBoundingClientRect();
-                                            if (text && rect.width > 0 && rect.height > 0 &&
-                                                text.includes('create a card') && text.includes('CRM')) {
-                                                console.log('[Roofr Extension] Found Job button (CRM text):', text.substring(0, 50));
-                                                btn.click();
-                                                return true;
-                                            }
-                                        }
-
-                                        // Fallback: Look for visible button starting with "Job"
-                                        for (const btn of allButtons) {
-                                            const text = btn.textContent?.trim();
-                                            const rect = btn.getBoundingClientRect();
-                                            if (text && rect.width > 0 && rect.height > 0 &&
-                                                text.startsWith('Job') && !text.includes('Jobs')) {
-                                                console.log('[Roofr Extension] Found Job button (fallback):', text.substring(0, 50));
-                                                btn.click();
-                                                return true;
-                                            }
-                                        }
-
-                                        // Debug: Log visible buttons with data-testid
-                                        console.log('[Roofr Extension] Job option not found. Buttons with data-testid:');
-                                        for (const btn of allButtons) {
-                                            const testid = btn.getAttribute('data-testid');
-                                            if (testid) {
-                                                console.log(`  data-testid="${testid}"`);
-                                            }
-                                        }
-
-                                        return false;
-                                    };
-
-                                    // Step 3: Fill the address input in the modal (NOT the search bar)
-                                    const fillAddressInput = () => {
-                                        // The modal input has specific attributes:
-                                        // - placeholder="Enter address and select"
-                                        // - role="combobox"
-                                        // - class contains "autocomplete-input form-control w-100"
-                                        // - It's inside an address-field form-group
-
-                                        // Primary: Find input with exact placeholder from the modal
-                                        const modalInput = document.querySelector('input[data-testid="create-job-address-input"], input[placeholder="Enter address and select"]');
-                                        if (modalInput) {
-                                            console.log('[Roofr Extension] Found modal address input via placeholder');
-                                            modalInput.focus();
-                                            modalInput.value = address;
-                                            modalInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                            modalInput.dispatchEvent(new Event('change', { bubbles: true }));
-                                            return true;
-                                        }
-
-                                        // Secondary: Find input inside address-field container
-                                        const addressFieldInput = document.querySelector('.address-field input, .address-field-form-group input, [class*="address-field"] input');
-                                        if (addressFieldInput) {
-                                            console.log('[Roofr Extension] Found address field input');
-                                            addressFieldInput.focus();
-                                            addressFieldInput.value = address;
-                                            addressFieldInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                            addressFieldInput.dispatchEvent(new Event('change', { bubbles: true }));
-                                            return true;
-                                        }
-
-                                        // Tertiary: Find combobox input with Job address label nearby
-                                        const comboboxInputs = document.querySelectorAll('input[role="combobox"]');
-                                        for (const input of comboboxInputs) {
-                                            // Check if it's the Job address input (has specific ID pattern)
-                                            if (input.id && input.id.includes('address-resolution-input')) {
-                                                console.log('[Roofr Extension] Found address input via combobox role');
-                                                input.focus();
-                                                input.value = address;
-                                                input.dispatchEvent(new Event('input', { bubbles: true }));
-                                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                                                return true;
-                                            }
-                                        }
-
-                                        // Fallback: Find any visible autocomplete input that's NOT in the search bar
-                                        const autocompleteInputs = document.querySelectorAll('input.autocomplete-input');
-                                        for (const input of autocompleteInputs) {
-                                            // Skip the search bar (it's in the header/nav area)
-                                            const isInSearchBar = input.closest('[class*="search"], [class*="Search"], nav, header');
-                                            const isVisible = input.offsetParent !== null;
-                                            const isInModal = input.closest('[class*="modal"], [class*="Modal"], [class*="dialog"], [class*="Dialog"], [class*="drawer"], [class*="Drawer"]');
-
-                                            if (isVisible && !isInSearchBar && isInModal) {
-                                                console.log('[Roofr Extension] Found autocomplete input in modal');
-                                                input.focus();
-                                                input.value = address;
-                                                input.dispatchEvent(new Event('input', { bubbles: true }));
-                                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                                                return true;
-                                            }
-                                        }
-
-                                        // Last resort: Find input with w-100 class inside form-group
-                                        const formInputs = document.querySelectorAll('.form-group input.w-100, .form-control.w-100');
-                                        for (const input of formInputs) {
-                                            const isVisible = input.offsetParent !== null;
-                                            if (isVisible && input.placeholder && input.placeholder.toLowerCase().includes('address')) {
-                                                console.log('[Roofr Extension] Found form input with address placeholder');
-                                                input.focus();
-                                                input.value = address;
-                                                input.dispatchEvent(new Event('input', { bubbles: true }));
-                                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                                                return true;
-                                            }
-                                        }
-
-                                        console.log('[Roofr Extension] Address input not found');
-                                        return false;
-                                    };
-
-                                    // --- Mirror lot/unit into the Job name (Roofr drops it from the address) ---
-                                    const extractUnit = (addr) => {
-                                        const seg = String(addr || '').split(',')[0];
-                                        const m = seg.match(/(#\s*[A-Za-z0-9-]+|\b(?:unit|apt|apartment|ste|suite|spc|space|bldg|building|lot|trlr|trailer|rm|room)\s*#?\s*[A-Za-z0-9-]+)\s*$/i);
-                                        return m ? m[1].replace(/\s+/g, ' ').trim() : '';
-                                    };
-                                    const setReactValue = (el, val) => {
-                                        const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-                                        const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-                                        setter.call(el, val);
-                                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                                    };
-                                    const fillJobName = () => {
-                                        const unit = extractUnit(address);
-                                        if (!unit) return true; // no unit/lot — nothing to add
-                                        let nameInput = null;
-                                        const opt = document.querySelector('input[data-testid="create-job-name-input"], input[placeholder="Optional"]');
-                                        if (opt && opt.offsetParent !== null) nameInput = opt;
-                                        if (!nameInput) {
-                                            for (const lb of document.querySelectorAll('label')) {
-                                                if (lb.textContent && lb.textContent.trim().toLowerCase() === 'job name') {
-                                                    const grp = lb.closest('.form-group, [class*="form-group"], div');
-                                                    const cand = grp && grp.querySelector('input:not([role="combobox"])');
-                                                    if (cand && cand.offsetParent !== null) { nameInput = cand; break; }
-                                                }
-                                            }
-                                        }
-                                        if (!nameInput) return false;
-                                        if (nameInput.value && nameInput.value.trim()) return true; // never clobber a typed name
-                                        nameInput.focus();
-                                        setReactValue(nameInput, unit);
-                                        console.log('[Roofr Extension] Filled Job name with unit/lot:', unit);
-                                        return true;
-                                    };
-                                    const tryFillJobName = (a = 1) => { if (fillJobName()) return; if (a < 8) setTimeout(() => tryFillJobName(a + 1), 400); };
-
-                                    // Check if dropdown is visible (Job option should be present)
-                                    const isDropdownOpen = () => {
-                                        // Look for the Job dropdown item by data-testid or by text
-                                        const jobBtn = document.querySelector('button[data-testid="job-board-do-it-all-dropdown-item-job"]');
-                                        if (jobBtn) return true;
-
-                                        // Also check for any button with "create a card" text
-                                        const allButtons = document.querySelectorAll('button');
-                                        for (const btn of allButtons) {
-                                            const text = btn.textContent?.trim();
-                                            if (text && text.includes('create a card')) {
-                                                return true;
-                                            }
-                                        }
-                                        return false;
-                                    };
-
-                                    // Execute with retries for both New button and Job option
-                                    let newAttempts = 0;
-                                    const maxNewAttempts = 10;
-                                    let newClickCount = 0; // Track how many times we've clicked New
-
-                                    const tryClickJob = (jobAttempt = 1) => {
-                                        const maxJobAttempts = 20;
-                                        console.log(`[Roofr Extension] Attempt ${jobAttempt}/${maxJobAttempts} to find Job option`);
-
-                                        if (clickJobOption()) {
-                                            // Success - wait for modal then fill address with retries
-                                            console.log('[Roofr Extension] Job option clicked, waiting for modal...');
-                                            const tryFillAddress = (fillAttempt = 1) => {
-                                                const maxFillAttempts = 10;
-                                                console.log(`[Roofr Extension] Attempt ${fillAttempt}/${maxFillAttempts} to fill address`);
-                                                if (fillAddressInput()) {
-                                                    console.log('[Roofr Extension] Address filled successfully!');
-                                                    tryFillJobName();
-                                                } else if (fillAttempt < maxFillAttempts) {
-                                                    setTimeout(() => tryFillAddress(fillAttempt + 1), 500);
-                                                } else {
-                                                    console.log('[Roofr Extension] Failed to fill address after', maxFillAttempts, 'attempts');
-                                                }
-                                            };
-                                            setTimeout(() => tryFillAddress(), 1000);
-                                        } else if (jobAttempt < maxJobAttempts) {
-                                            // Check if dropdown is open - if not, re-click New button
-                                            if (jobAttempt % 5 === 0 && !isDropdownOpen() && newClickCount < 3) {
-                                                console.log('[Roofr Extension] Dropdown not open, re-clicking New button...');
-                                                newClickCount++;
-                                                clickNewButton();
-                                                setTimeout(() => tryClickJob(jobAttempt + 1), 1000);
-                                            } else {
-                                                // Normal retry with increasing delays
-                                                const delay = 300 + (jobAttempt * 50);
-                                                setTimeout(() => tryClickJob(jobAttempt + 1), delay);
-                                            }
-                                        } else {
-                                            console.log('[Roofr Extension] Failed to find Job option after', maxJobAttempts, 'attempts');
-                                        }
-                                    };
-
-                                    const tryClickNew = () => {
-                                        newAttempts++;
-                                        console.log(`[Roofr Extension] Attempt ${newAttempts}/${maxNewAttempts} to find New button`);
-
-                                        if (clickNewButton()) {
-                                            newClickCount++;
-                                            // Success - wait longer for dropdown to render, then try Job with retries
-                                            console.log('[Roofr Extension] New button clicked, waiting for dropdown...');
-                                            // Wait 2 seconds for dropdown animation
-                                            setTimeout(() => tryClickJob(), 2000);
-                                        } else if (newAttempts < maxNewAttempts) {
-                                            // Retry after delay
-                                            setTimeout(tryClickNew, 500);
-                                        } else {
-                                            console.log('[Roofr Extension] Failed to find New button after', maxNewAttempts, 'attempts');
-                                        }
-                                    };
-
-                                    tryClickNew();
-                                },
-                                args: [address]
-                            }).then(() => {
-                                addLog('Roofr job creation script executed');
-                            }).catch(err => {
-                                addLog(`Error creating Roofr job: ${err.message}`, 'ERROR');
-                            });
-                        };
-
-                        // NOTE: Tab listener and handleSearchResults call is now handled above in the injection flow (lines 4900-4937)
-                        // The old duplicate listener has been removed to prevent double-clicking
-
+                            })).then(res => {
+                                const r = res?.[0]?.result || {};
+                                if (r.action === 'opened') addLog(`Roofr: existing job found live (#${r.id}, ${r.address}) — opened job card`);
+                                else if (r.action === 'prefilled') addLog(`Roofr: no existing job — New Job ready with "${r.picked}" selected${r.unit ? ` (Job name: ${r.unit})` : ''}${r.ready ? '' : ' — Continue not enabled yet'}`);
+                                else if (r.action === 'prefilled_needs_pick') addLog(`Roofr: no existing job — New Job open, no confident suggestion match (top: "${r.top}"); rep picks`, 'WARN');
+                                else if (r.action === 'prefilled_no_suggestions') addLog('Roofr: no existing job — New Job open but Google returned no suggestions', 'WARN');
+                                else if (r.action === 'api_error') addLog(`Roofr: live check failed (${r.error}) — search put in Roofr's box instead of creating a job`, 'WARN');
+                                else addLog(`Roofr: ${r.error || 'job lookup did not finish'}`, 'ERROR');
+                            }).catch(err => addLog(`Roofr lookup error: ${err.message}`, 'ERROR'));
+                        }
                         } // end search_roofr check
 
                         // Group all tabs together, reorder, and move to the far left (only if multiple tabs are open)
