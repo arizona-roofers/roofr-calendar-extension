@@ -1,10 +1,10 @@
 {
-  "version": "3.2.79",
+  "version": "3.2.80",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T19:30:23.247Z",
+  "release_date": "2026-09-28T19:33:49.378Z",
   "changelog": [
-    "Answered-call job card: falls back to reading the caller number off the CTM phone screen, and keeps a short diagnostic trace"
+    "Call tab group holds only the caller's job cards — the CTM tab is no longer pulled into it"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.79/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.79"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.80/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.80"
 }

@@ -905,6 +905,27 @@ function getDisplayName(fullName) {
     return parts[0];  // Just first name "Andrew"
 }
 
+// Put an auto-opened job card in a tab group named for the caller. Joins an
+// existing group with that title in the same window (a second job card for
+// the same caller) instead of starting a new one. The CTM tab stays out.
+async function groupJobCardTab(newTab, callerName) {
+    try {
+        const { ctm_group_tabs } = await chrome.storage.sync.get({ ctm_group_tabs: true });
+        if (!ctm_group_tabs || !newTab?.id) return;
+        const title = getDisplayName(callerName) || 'Call';
+        const existing = (await chrome.tabGroups.query({ windowId: newTab.windowId }))
+            .find(g => g.title === title);
+        if (existing) {
+            await chrome.tabs.group({ tabIds: [newTab.id], groupId: existing.id });
+            return;
+        }
+        const groupId = await chrome.tabs.group({ tabIds: [newTab.id], createProperties: { windowId: newTab.windowId } });
+        await chrome.tabGroups.update(groupId, { title, color: 'cyan', collapsed: false });
+    } catch (groupErr) {
+        console.warn('[Service Worker] Tab grouping failed:', groupErr);
+    }
+}
+
 // Helper to update tab group title when call state changes
 async function updateCtmTabGroup(phoneNumber, callerName, agentName, isAnswered, targetWindowId) {
     try {
@@ -1100,24 +1121,8 @@ async function handleCtmIncomingCall(phoneNumber, formattedPhone, skipEnabledChe
                         }
                         const newTab = await chrome.tabs.create(createOpts);
 
-                        // Group tabs if enabled
-                        const groupSetting = await chrome.storage.sync.get({ ctm_group_tabs: true });
-                        if (groupSetting.ctm_group_tabs && ctmTabs.length > 0) {
-                            try {
-                                const displayName = getDisplayName(callerName);
-                                const groupId = await chrome.tabs.group({
-                                    tabIds: [ctmTabs[0].id, newTab.id],
-                                    ...(ctmTabs[0].windowId ? { createProperties: { windowId: ctmTabs[0].windowId } } : {})
-                                });
-                                await chrome.tabGroups.update(groupId, {
-                                    title: displayName || 'Call',
-                                    color: 'cyan',
-                                    collapsed: false
-                                });
-                            } catch (groupErr) {
-                                console.warn('[Service Worker] Tab grouping failed:', groupErr);
-                            }
-                        }
+                        // Group only the caller's job card(s) — never the CTM tab
+                        await groupJobCardTab(newTab, callerName);
 
                         return { ok: true, reason: 'job_card_opened', jobId: job.job_id, tabId: newTab.id };
                     } else {
@@ -1180,24 +1185,8 @@ async function handleCtmIncomingCall(phoneNumber, formattedPhone, skipEnabledChe
                         if (ctmTabIndex >= 0) createOpts.index = ctmTabIndex + 1;
                         const newTab = await chrome.tabs.create(createOpts);
 
-                        // Group tabs if enabled
-                        const groupSetting = await chrome.storage.sync.get({ ctm_group_tabs: true });
-                        if (groupSetting.ctm_group_tabs && ctmTabs.length > 0) {
-                            try {
-                                const displayName = getDisplayName(callerName);
-                                const groupId = await chrome.tabs.group({
-                                    tabIds: [ctmTabs[0].id, newTab.id],
-                                    ...(ctmWindowId ? { createProperties: { windowId: ctmWindowId } } : {})
-                                });
-                                await chrome.tabGroups.update(groupId, {
-                                    title: displayName || 'Call',
-                                    color: 'cyan',
-                                    collapsed: false
-                                });
-                            } catch (groupErr) {
-                                console.warn('[Service Worker] Tab grouping failed:', groupErr);
-                            }
-                        }
+                        // Group only the caller's job card(s) — never the CTM tab
+                        await groupJobCardTab(newTab, callerName);
 
                         return { ok: true, reason: 'job_card_opened', jobId: job.job_id, tabId: newTab.id };
                     } else {
