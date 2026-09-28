@@ -1,10 +1,11 @@
 {
-  "version": "3.2.82",
+  "version": "3.2.83",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T20:43:27.238Z",
+  "release_date": "2026-09-28T20:53:05.981Z",
   "changelog": [
-    "Scanner: removed the All region pill, Collapse/Expand All and the Capacity button — capacity now refreshes on its own (every minute and whenever the panel comes back into view)"
+    "Dialer: leads with 0 attempts have no × — they must be dialed before they can be dropped",
+    "Dialer: LeadTruffle leads also open the CTM call log for that number in a background tab during the thread review"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.82/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.82"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.83/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.83"
 }

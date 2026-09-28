@@ -684,7 +684,10 @@
       const metaEl = document.createElement("span");
       metaEl.className = "meta";
       metaEl.innerHTML = `${lead.attemptCount || 0}&nbsp;att${lead.lockedBy && lead.lockedBy !== repName ? " · 🔒 " + escapeHtml(lead.lockedBy) : ""}`;
-      const xBtn = document.createElement("button");
+      // 0-attempt leads can't be dropped from the session — they have to be
+      // dialed at least once (Travis 2026-09-28). The × appears after a dial.
+      const xBtn = attemptsNow === 0 ? null : document.createElement("button");
+      if (xBtn) {
       xBtn.className = "x-btn";
       xBtn.textContent = "×";
       xBtn.title = "Remove from this session (rejoins on next session)";
@@ -696,9 +699,10 @@
         renderQueue();
         log(`removed from session: ${lead.name || "(no name)"} ${lead.phone}`, "act", "queue");
       };
+      }
       li.appendChild(leftEl);
       li.appendChild(metaEl);
-      li.appendChild(xBtn);
+      if (xBtn) li.appendChild(xBtn);
       els.queue.appendChild(li);
     }
     els.queueCount.textContent = queue.length;
@@ -1764,6 +1768,7 @@
       stopCallTimer();
       setPhase("lt-review");
       log(`⏸ LSA lead ${leadTag(lead)} — LeadTruffle review before dial`, "act", "dial");
+      lsaOpenCtmHistoryTab(lead.phone);
       lsaOpenConversationTab(lead.ltUrl);
       return;
     }
@@ -5029,6 +5034,25 @@
         }
       });
     } catch (_) { window.open(url, "_blank"); }
+  }
+
+  // LeadTruffle leads: CTM call log filtered to the number, in ONE reused
+  // background tab beside the LeadTruffle thread, so the rep sees every
+  // prior call before dialing. The call LOG (/calls), not the desk — a second
+  // desk tab would load a second softphone.
+  let _lsaCtmHistTabId = null;
+  function lsaOpenCtmHistoryTab(phone) {
+    const d = String(phone || "").replace(/\D/g, "").slice(-10);
+    if (d.length !== 10) return;
+    const url = `https://app.calltrackingmetrics.com/calls#filter=${d}`;
+    try {
+      const prev = _lsaCtmHistTabId;
+      chrome.tabs.create({ url, active: false }, (t) => {
+        if (chrome.runtime.lastError || !t) return;
+        _lsaCtmHistTabId = t.id;
+        if (prev != null && prev !== t.id) chrome.tabs.remove(prev, () => { void chrome.runtime.lastError; });
+      });
+    } catch (_) {}
   }
 
   function rschedOpenJobCard(url) {
