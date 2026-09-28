@@ -1,11 +1,10 @@
 {
-  "version": "3.2.81",
+  "version": "3.2.82",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T19:40:51.984Z",
+  "release_date": "2026-09-28T20:43:27.238Z",
   "changelog": [
-    "Job card waits for a real pickup (no pop while the call is still ringing)",
-    "No job card for a call you already transferred away"
+    "Scanner: removed the All region pill, Collapse/Expand All and the Capacity button — capacity now refreshes on its own (every minute and whenever the panel comes back into view)"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.81/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.81"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.82/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.82"
 }

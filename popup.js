@@ -4660,6 +4660,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     document.getElementById("refreshCapacityBtn")?.addEventListener("click", () => refreshCapacity());
     setInterval(() => { if (document.visibilityState === "visible") refreshCapacity({ silent: true }); }, CAPACITY_POLL_MS);
+    // No button any more (Travis 2026-09-28: "have the capacity button be
+    // automatic") — also catch up the moment the panel comes back into view.
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshCapacity({ silent: true }); });
 
     function updateFindCounter() { if (findCounter) findCounter.textContent = `${findStats.index > 0 ? findStats.index : 0} / ${findStats.count}`; }
     const pushFindUpdate = debounce(async (term) => {

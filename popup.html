@@ -3279,7 +3279,7 @@
     /* Toolbar: region filter as one segmented control; Capacity/Expand stay in
        the row instead of overflowing past the panel edge. */
     #scanner-toolbar .filters-row { flex-wrap: wrap; row-gap: 6px; align-items: center; }
-    #scanner-toolbar .filters-row > div:last-child { flex-shrink: 0; }
+    #scanner-toolbar .filters-row .region-pills { flex: 1 1 auto; }
     #scanner-toolbar .region-pills {
       gap: 2px; padding: 3px; border-radius: 10px;
       background: var(--surface-hover); border: 1px solid var(--border);
@@ -3508,12 +3508,6 @@
               <button class="region-pill" data-region="SOUTH">South</button>
               <button class="region-pill" data-region="COMM">Comm</button>
               <button class="region-pill" data-region="REPAIR">Repair</button>
-              <button class="region-pill" data-region="ALL">All</button>
-            </div>
-            <div class="spacer"></div>
-            <div style="display:flex; gap: 6px;">
-              <button id="refreshCapacityBtn" class="btn ghost" style="font-size:0.8rem" title="Re-pull rep availability from the scheduler (no calendar rescan)">↻ Capacity</button>
-              <button id="toggleAll" class="btn ghost" style="font-size:0.8rem">Expand All</button>
             </div>
           </div>
 
