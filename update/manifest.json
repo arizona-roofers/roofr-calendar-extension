@@ -1,11 +1,10 @@
 {
-  "version": "3.2.78",
+  "version": "3.2.79",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T19:25:04.679Z",
+  "release_date": "2026-09-28T19:30:23.247Z",
   "changelog": [
-    "Call job card skips jobs deleted in Roofr — it no longer opens a dead job when a caller has several",
-    "Job card opens as soon as you answer (from 3.2.77)"
+    "Answered-call job card: falls back to reading the caller number off the CTM phone screen, and keeps a short diagnostic trace"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.78/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.78"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.79/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.79"
 }

@@ -499,6 +499,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         )
             .then(result => {
                 console.log('[Service Worker] CTM call handled:', result);
+                jobCardTrace('call-list', { phone: msg.phoneNumber, answered: !!msg.isAnswered, outbound: !!msg.isOutbound, agent: msg.agentName || null, res: result });
             })
             .catch(err => {
                 console.error('[Service Worker] Error handling CTM call:', err);
@@ -818,6 +819,27 @@ function claimJobCardOpen(phoneNumber) {
 // number so the pickup can open the job card immediately instead of waiting
 // for the call-list DOM to repaint.
 let _softphoneRing = null;   // { phone, name, windowId, at }
+let _softphonePickup = null; // answered, number not known yet — read from UI samples
+function softphoneOpenJobCard(phone, name, windowId) {
+    handleCtmIncomingCall(phone, phone, false, name, windowId, null, true, false)
+        .then(res => jobCardTrace('open-result', { phone, res }))
+        .catch(e => jobCardTrace('open-error', { phone, err: String(e?.message || e) }));
+}
+
+// Last 40 call → job-card steps in storage.local ('jobcard_trace') so a
+// failed pop can be diagnosed after the fact (SW console is gone by then).
+function jobCardTrace(step, data) {
+    try {
+        const entry = { t: new Date().toISOString(), step, ...data };
+        console.log('[JobCardTrace]', entry);
+        chrome.storage.local.get({ jobcard_trace: [] }).then(({ jobcard_trace }) => {
+            const s = JSON.stringify(entry);
+            const slim = s.length > 1500 ? { t: entry.t, step, raw: s.slice(0, 1500) } : entry;
+            const next = jobcard_trace.concat([slim]).slice(-40);
+            return chrome.storage.local.set({ jobcard_trace: next });
+        }).catch(() => {});
+    } catch (_) {}
+}
 function extractCallerFromCtmDetail(detail) {
     if (!detail || typeof detail !== 'object') return null;
     const PHONE_KEYS = /^(caller_?number|callerNumber|caller_?phone|from|from_?number|customer_?number|contact_?number|phone_?number|caller)$/i;
@@ -1983,16 +2005,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             // dial, so it can never be a pickup of the remembered ring.
             if (ev === 'ctm:incomingCall') {
                 const who = extractCallerFromCtmDetail(msg.payload.detail);
-                _softphoneRing = who ? { ...who, windowId: sender?.tab?.windowId ?? null, at: Date.now() } : null;
-                if (!who) console.log('[JobCardFast] incomingCall had no caller number:', JSON.stringify(msg.payload.detail || {}).slice(0, 400));
+                _softphoneRing = { phone: who?.phone || null, name: who?.name || null, windowId: sender?.tab?.windowId ?? null, at: Date.now() };
+                _softphonePickup = null;
+                jobCardTrace('ring', { phone: _softphoneRing.phone, detail: msg.payload.detail });
             } else if (ev === 'ctm:start' && _softphoneRing && Date.now() - _softphoneRing.at < 90000) {
                 const r = _softphoneRing;
                 _softphoneRing = null;
-                console.log('[JobCardFast] pickup of', r.phone, '— opening job card now');
-                handleCtmIncomingCall(r.phone, r.phone, false, r.name, r.windowId, null, true, false)
-                    .catch(e => console.warn('[JobCardFast] open failed:', e));
+                if (r.phone) {
+                    jobCardTrace('pickup', { phone: r.phone, via: 'ring-detail' });
+                    softphoneOpenJobCard(r.phone, r.name, r.windowId);
+                } else {
+                    // Ring detail had no number — read it off the softphone
+                    // screen (bridge sends a UI text sample ~1/sec after start).
+                    _softphonePickup = { ...r, at: Date.now() };
+                    jobCardTrace('pickup', { phone: null, via: 'waiting-for-ui' });
+                }
+            } else if (ev === 'ctm:live-activity-sample' && _softphonePickup) {
+                const ui = String(msg.payload.detail?.ui || '');
+                const m = ui.match(/(?:\+?1[\s.-]?)?\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})(?!\d)/);
+                if (m) {
+                    const p = _softphonePickup;
+                    _softphonePickup = null;
+                    jobCardTrace('pickup-ui', { phone: m[1] + m[2] + m[3], ui: ui.slice(0, 200) });
+                    softphoneOpenJobCard(m[1] + m[2] + m[3], p.name, p.windowId);
+                } else if (Date.now() - _softphonePickup.at > 15000) {
+                    jobCardTrace('pickup-ui-miss', { ui: ui.slice(0, 200) });
+                    _softphonePickup = null;
+                }
             } else if (ev === 'ctm:connecting' || ev === 'ctm:end-activity' || ev === 'ctm:failed') {
                 _softphoneRing = null;
+                _softphonePickup = null;
             }
             if (ev === 'ctm:connecting' || ev === 'ctm:start') {
                 meetAutoMute();
