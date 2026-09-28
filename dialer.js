@@ -305,6 +305,7 @@
   let knownSources = new Set();
   let filterAttemptPreset = "all";       // "new" | "followup" | "persistent" | "all"
   let allKnownSources = [];              // rebuilt from fetched data
+  let sourceOpenCounts = new Map();      // source → open (dialable-status) leads, for chip counts
   const completedThisSession = [];       // {phone, name, status, attempts} — the rolling DAILY "Done" list (persisted, resets at AZ midnight)
   const DAILY_DONE_KEY = "dialer_daily_done"; // chrome.storage.local: { date:"M/D/YYYY", done:[...] }
   let _dailyDoneDate = "";               // AZ day the current completedThisSession belongs to
@@ -577,25 +578,28 @@
     else el.style.color = "var(--muted)";
   }
 
+  // SEO / NCT / Modernize colors come from the Lead Tracking System sheet's row-1
+  // header (the only sources it colors); the rest are picked not to clash with them.
   const SOURCE_PILL_MAP = {
     "Modernize":                           { label: "MOD",  cls: "src-mod" },
     "NCT":                                 { label: "NCT",  cls: "src-nct" },
     "Arizona Roofers WEBSITE FORMS":       { label: "SEO",  cls: "src-seo" },
-    "Arizona Roofers GOOGLE SEARCH ADS":   { label: "ADS",  cls: "src-ads" },
+    "Arizona Roofers GOOGLE SEARCH ADS":   { label: "ADS",  cls: "src-gads" },
     "AZROOFCO WEBSITE":                    { label: "SEO",  cls: "src-seo" },
-    "AZROOFCO GOOGLE SEARCH ADS":          { label: "ADS",  cls: "src-ads" },
+    "AZROOFCO GOOGLE SEARCH ADS":          { label: "ADS",  cls: "src-gads" },
     "GAF":                                 { label: "GAF",  cls: "src-gaf" },
-    "Arizona Roofers LSA Messages":        { label: "LSA",  cls: "src-ads" },
-    "Roof Pro LSA Messages":               { label: "LSA",  cls: "src-ads" },
-    "Arizona Roofers Angis Leads":         { label: "ANGI", cls: "src-ads" },
+    "Arizona Roofers LSA Messages":        { label: "LSA",  cls: "src-lsa" },
+    "Roof Pro LSA Messages":               { label: "LSA",  cls: "src-lsa" },
+    "Arizona Roofers Angis Leads":         { label: "ANGI", cls: "src-angi" },
   };
   function sourcePillHtml(source) {
     const src = (source || "").trim();
     const mapped = SOURCE_PILL_MAP[src];
     if (mapped) return `<span class="src-pill ${mapped.cls}">${mapped.label}</span>`;
     if (!src) return `<span class="src-pill src-unk">?</span>`;
-    const short = src.length > 8 ? src.substring(0, 7) + "." : src;
-    return `<span class="src-pill src-unk">${escapeHtml(short)}</span>`;
+    if (/^missed/i.test(src)) return `<span class="src-pill src-missed" title="${escapeHtml(src)}">MISSED</span>`;
+    const short = src.length > 10 ? src.substring(0, 9) + "…" : src;
+    return `<span class="src-pill src-unk" title="${escapeHtml(src)}">${escapeHtml(short)}</span>`;
   }
 
   // Status pill — color-coded by disposition. Shared by renderQueue +
@@ -947,9 +951,15 @@
 
     // Collect all unique sources for the filter UI (excluding blocklisted ones)
     const sourcesInData = new Set();
+    sourceOpenCounts = new Map(); // dialable-status leads per source, shown on the chips
     for (const l of rows) {
       const src = (l.source || "").trim();
-      if (src && !EXCLUDE_SOURCES.has(src.toLowerCase())) sourcesInData.add(src);
+      if (src && !EXCLUDE_SOURCES.has(src.toLowerCase())) {
+        sourcesInData.add(src);
+        if (ALLOWED_STATUSES.has((l.status || "").trim().toLowerCase())) {
+          sourceOpenCounts.set(src, (sourceOpenCounts.get(src) || 0) + 1);
+        }
+      }
     }
     allKnownSources = Array.from(sourcesInData).sort();
     absorbNewSources(sourcesInData);
@@ -2713,45 +2723,96 @@
     document.getElementById("missed-filter-panel")?.classList.toggle("open");
   });
 
+  // Sheet source names are long and inconsistent ("Arizona Roofers GOOGLE SEARCH
+  // ADS") — chips show a short name; the full name stays in the tooltip.
+  const SOURCE_CHIP_LABELS = {
+    "Arizona Roofers WEBSITE FORMS": "Website",
+    "Arizona Roofers GOOGLE SEARCH ADS": "Google Ads",
+    "Arizona Roofers LSA Messages": "LSA · AZR",
+    "Arizona Roofers Angis Leads": "Angi",
+    "AZROOFCO WEBSITE": "Website · AZRC",
+    "AZROOFCO GOOGLE SEARCH ADS": "Google Ads · AZRC",
+    "Roof Pro LSA Messages": "LSA · Roof Pro",
+    "Missed Call": "Missed calls",
+  };
+  function sourceChipLabel(src) {
+    if (SOURCE_CHIP_LABELS[src]) return SOURCE_CHIP_LABELS[src];
+    const s = src.replace(/^Arizona Roofers\s+/i, "");
+    return s === s.toUpperCase() && s.length > 4 ? s.charAt(0) + s.slice(1).toLowerCase() : s;
+  }
+  function sourceChipDot(src) {
+    const cls = SOURCE_PILL_MAP[src]?.cls || (/^missed/i.test(src) ? "src-missed" : "src-unk");
+    return `<span class="chip-dot ${cls}"></span>`;
+  }
+
+  // Empty filterSources = every source is dialed; the "All" chip makes that
+  // state visible instead of looking like nothing is selected.
+  function syncSourceChips() {
+    if (!els.sourceChecks) return;
+    for (const cb of els.sourceChecks.querySelectorAll("input")) {
+      cb.checked = filterSources.has(cb.value);
+      cb.parentElement.classList.toggle("checked", cb.checked);
+    }
+    els.sourceChecks.querySelector(".src-all")?.classList.toggle("checked", filterSources.size === 0);
+  }
+
   function rebuildSourceCheckboxes() {
     if (!els.sourceChecks) return;
     const container = els.sourceChecks;
     const existing = new Set(Array.from(container.querySelectorAll("input")).map(i => i.value));
     const needed = new Set(allKnownSources);
-    if (existing.size === needed.size && [...needed].every(s => existing.has(s))) return;
+    const same = existing.size === needed.size && [...needed].every(s => existing.has(s));
 
-    container.innerHTML = "";
-    for (const src of allKnownSources) {
-      const label = document.createElement("label");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.value = src;
-      cb.checked = filterSources.has(src);
-      if (cb.checked) label.classList.add("checked");
-      cb.addEventListener("change", () => {
-        if (cb.checked) {
-          filterSources.add(src);
-        } else {
-          filterSources.delete(src);
-        }
-        label.classList.toggle("checked", cb.checked);
+    if (!same) {
+      container.innerHTML = "";
+      const allBtn = document.createElement("button");
+      allBtn.type = "button";
+      allBtn.className = "src-all";
+      allBtn.textContent = "All sources";
+      allBtn.addEventListener("click", () => {
+        if (!filterSources.size) return;
+        filterSources = new Set();
+        syncSourceChips();
         saveFilterPrefs();
         updateFilterSummary();
         fetchLeads();
       });
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(src));
-      container.appendChild(label);
+      container.appendChild(allBtn);
+      // Busiest sources first so the chips people actually use sit up front.
+      const ordered = [...allKnownSources].sort((a, b) =>
+        (sourceOpenCounts.get(b) || 0) - (sourceOpenCounts.get(a) || 0) || sourceChipLabel(a).localeCompare(sourceChipLabel(b)));
+      for (const src of ordered) {
+        const label = document.createElement("label");
+        label.title = src;
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = src;
+        cb.addEventListener("change", () => {
+          if (cb.checked) filterSources.add(src);
+          else filterSources.delete(src);
+          syncSourceChips();
+          saveFilterPrefs();
+          updateFilterSummary();
+          fetchLeads();
+        });
+        label.appendChild(cb);
+        label.insertAdjacentHTML("beforeend",
+          `${sourceChipDot(src)}<span class="chip-text">${escapeHtml(sourceChipLabel(src))}</span><span class="chip-count"></span>`);
+        container.appendChild(label);
+      }
     }
+    for (const cb of container.querySelectorAll("input")) {
+      const n = sourceOpenCounts.get(cb.value) || 0;
+      const countEl = cb.parentElement.querySelector(".chip-count");
+      if (countEl) countEl.textContent = n ? String(n) : "";
+    }
+    syncSourceChips();
   }
 
   function clearAllFilters() {
     filterSources = new Set();
     filterAttemptPreset = "all";
-    for (const cb of els.sourceChecks?.querySelectorAll("input") || []) {
-      cb.checked = false;
-      cb.parentElement.classList.remove("checked");
-    }
+    syncSourceChips();
     for (const b of els.attemptPresets?.querySelectorAll("button") || []) {
       b.classList.toggle("active", b.dataset.preset === "all");
     }
@@ -2777,12 +2838,14 @@
   function updateFilterSummary() {
     if (!els.filterSummary) return;
     const parts = [];
-    if (filterSources.size > 0) parts.push(`${filterSources.size} source${filterSources.size > 1 ? "s" : ""}`);
+    if (filterSources.size === 1) parts.push(sourceChipLabel([...filterSources][0]));
+    else if (filterSources.size > 1) parts.push(`${filterSources.size} sources`);
     if (filterAttemptPreset !== "all") {
-      const labels = { "new": "New (0)", "followup": "1-3 att", "persistent": "4-7 att" };
+      const labels = { "new": "New", "followup": "1–3 attempts", "persistent": "4+ attempts" };
       parts.push(labels[filterAttemptPreset] || filterAttemptPreset);
     }
-    els.filterSummary.textContent = parts.length > 0 ? parts.join(" + ") : "";
+    els.filterSummary.textContent = parts.length > 0 ? parts.join(" · ") : "All leads";
+    els.filterSummary.classList.toggle("active", parts.length > 0);
   }
 
   function updateFilterStats(skippedSource, skippedAttempts, skipped3hr, forcedFresh = 0) {

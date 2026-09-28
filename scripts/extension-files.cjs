@@ -25,7 +25,6 @@ module.exports = {
     'routing.js',
     'themes.js',
     'metadata.json',
-    'batch-dashboard.html',
     'dialer.html',
     'dialer.js',
     'dialer-bridge.js',

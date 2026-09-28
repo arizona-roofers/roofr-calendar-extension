@@ -451,10 +451,13 @@
       border-radius: 3px; white-space: nowrap; line-height: 1.3;
       border: 1px solid var(--border);
     }
-    .src-pill.src-mod  { background: #fef3c7; color: #92400e; border-color: #fbbf24; }
-    .src-pill.src-nct  { background: #dbeafe; color: #1e40af; border-color: #60a5fa; }
-    .src-pill.src-seo  { background: #d1fae5; color: #065f46; border-color: #34d399; }
-    .src-pill.src-ads  { background: #ede9fe; color: #5b21b6; border-color: #a78bfa; }
+    /* SEO / NCT / MOD = exact Lead Tracking System sheet header fills */
+    .src-pill.src-mod  { background: #783f04; color: #fff; border-color: #783f04; }
+    .src-pill.src-nct  { background: #674ea7; color: #fff; border-color: #674ea7; }
+    .src-pill.src-seo  { background: #9fc5e8; color: #0b5394; border-color: #9fc5e8; }
+    .src-pill.src-gads { background: #ccfbf1; color: #115e59; border-color: #5eead4; }
+    .src-pill.src-lsa  { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+    .src-pill.src-ads  { background: #ccfbf1; color: #115e59; border-color: #5eead4; }
     .src-pill.src-angi { background: #fce7f3; color: #9d174d; border-color: #f472b6; }
     .src-pill.src-gaf  { background: var(--surface-hi); color: var(--muted); border-color: var(--border); }
     .src-pill.src-unk  { background: var(--surface-hi); color: var(--light); border-color: var(--border); }
@@ -567,6 +570,242 @@
       font: inherit; font-size: 12px; padding: 6px 8px;
       border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text);
     }
+
+    /* ════ Visual polish (2026-09-28) ════
+       Overrides only — same IDs/classes dialer.js drives, so behavior is untouched.
+       Softer borders, card depth, tier color rails, calmer chrome, roomier footer. */
+    :root {
+      --line: color-mix(in srgb, var(--border) 55%, transparent);
+      --radius-lg: 12px;
+      --shadow-card: 0 1px 2px rgb(15 23 42 / .06), 0 1px 1px rgb(15 23 42 / .03);
+      --shadow-lift: 0 6px 16px -6px rgb(15 23 42 / .18), 0 2px 4px rgb(15 23 42 / .05);
+    }
+    body.dark-theme {
+      /* re-derive: a :root custom property would keep the LIGHT --border */
+      --line: color-mix(in srgb, var(--border) 80%, transparent);
+      --shadow-card: 0 1px 2px rgb(0 0 0 / .4);
+      --shadow-lift: 0 8px 20px -8px rgb(0 0 0 / .6);
+    }
+    button { border-radius: 8px; border-color: var(--line); }
+
+    /* Header */
+    header {
+      padding: 12px 14px 10px; border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+    }
+    header h1 {
+      font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
+      display: flex; align-items: center; gap: 8px;
+    }
+    header h1::before {
+      content: "📞"; font-size: 13px; width: 26px; height: 26px; border-radius: 8px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent-light); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+    }
+    header .meta { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+    .pill {
+      background: var(--surface); border: 1px solid var(--line);
+      padding: 2px 8px; font-weight: 500;
+    }
+    .pill.ok { color: #065f46; background: var(--success-bg); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+    .pill.bad { color: #991b1b; background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+    .pill.warn { color: #92400e; background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+    body.dark-theme .pill.ok, body.dark-theme .pill.bad, body.dark-theme .pill.warn { color: var(--text); }
+    #settings-btn {
+      width: 32px; height: 32px; padding: 0; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; box-shadow: none; color: var(--muted);
+    }
+
+    /* Top rail */
+    .top-rail { padding: 10px 14px 8px; border-bottom: 1px solid var(--line); }
+    .queue-selector {
+      min-height: 36px; padding: 7px 12px; font-size: 13px; border-radius: 10px;
+      border-color: var(--line); box-shadow: var(--shadow-card);
+    }
+    .queue-menu { border-radius: 12px; padding: 6px; border-color: var(--line); background: var(--surface); }
+    .tab-btn { border-radius: 8px; padding: 8px 10px; }
+    .filter-toggle { padding: 4px 2px; font-size: 10.5px; letter-spacing: .06em; }
+    .filter-body { padding: 6px 2px 10px; }
+
+    /* Section headers */
+    h2 { font-size: 10.5px; letter-spacing: .07em; color: var(--light); font-weight: 700; }
+    #queue-header, #rsched-queue-header, #lsa-queue-header { color: var(--muted); }
+    #refresh-btn, #rsched-refresh-btn, #lsa-refresh-btn, #log-clear-btn, #log-copy-btn {
+      border-radius: 999px !important; padding: 3px 10px !important; background: var(--surface);
+      border-color: var(--line); color: var(--muted);
+    }
+
+    /* Queue cards */
+    #queue li {
+      position: relative; overflow: hidden;
+      border: 1px solid var(--line); border-radius: var(--radius-lg);
+      padding: 9px 10px 9px 14px; margin-bottom: 6px;
+      box-shadow: var(--shadow-card);
+      transition: box-shadow 140ms, transform 140ms, border-color 140ms;
+    }
+    #queue li::before {
+      content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: var(--line);
+    }
+    #queue li:has(.tier.t1)::before { background: var(--success); }
+    #queue li:has(.tier.t2)::before { background: var(--warn); }
+    #queue li:has(.tier.t3)::before { background: var(--light); }
+    #queue li:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); border-color: var(--border); }
+    #queue li.customer-row { border-left: 1px solid var(--line); }
+    #queue li.customer-row::before { background: #3b9fd6; }
+    #queue .left .row1 { gap: 6px; }
+    #queue .name { font-size: 13px; font-weight: 650; letter-spacing: -0.005em; }
+    #queue .left .row2 { margin-top: 4px; gap: 5px; flex-wrap: wrap; }
+    #queue a.phone-link { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 500; }
+    #queue .meta {
+      font-size: 10px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums;
+      background: var(--surface-hi); padding: 2px 7px; border-radius: 999px; margin-top: 1px;
+    }
+    #queue .x-btn { opacity: .35; transition: opacity 120ms; margin-top: -1px; }
+    #queue li:hover .x-btn, #queue .x-btn:focus-visible { opacity: 1; }
+    .tier { margin-right: 0; font-size: 9.5px; letter-spacing: .05em; padding: 2px 7px; border-radius: 999px; }
+    .src-pill { font-size: 9px; padding: 1px 6px; border-radius: 999px; letter-spacing: .03em; }
+    .src-pill.src-missed { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+    body.dark-theme .tier.t1 { background: rgb(16 185 129 / .16); color: #6ee7b7; }
+    body.dark-theme .tier.t2 { background: rgb(245 158 11 / .16); color: #fcd34d; }
+    body.dark-theme .tier.t3 { background: rgb(148 163 184 / .14); color: #cbd5e1; }
+    /* Dark: soft tints, except the three sheet colors which stay solid (they read fine on dark) */
+    body.dark-theme .src-pill:not(.src-seo):not(.src-nct):not(.src-mod) { background: rgb(148 163 184 / .12); border-color: rgb(148 163 184 / .25); color: #cbd5e1; }
+    body.dark-theme .src-pill.src-missed { color: #fca5a5; }
+    body.dark-theme .src-pill.src-gads, body.dark-theme .src-pill.src-ads { color: #5eead4; }
+    body.dark-theme .src-pill.src-lsa { color: #fdba74; }
+    body.dark-theme .src-pill.src-angi { color: #f9a8d4; }
+
+    /* Completed + review cards */
+    #completed li { border-radius: var(--radius-lg); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
+    .rsched-row { border-radius: var(--radius-lg); border-color: var(--line); box-shadow: var(--shadow-card); padding: 9px 11px; margin-bottom: 6px; }
+    .rsched-card {
+      border-radius: 14px; border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+      box-shadow: var(--shadow-lift); padding: 14px;
+    }
+    .rescheduled-stage-row button { border-radius: 10px; }
+
+    /* Event log */
+    #log { border-radius: var(--radius-lg); border-color: var(--line); }
+
+    /* Footer */
+    .dialer-footer {
+      border-top: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 -8px 24px -12px rgb(15 23 42 / .25);
+      padding: 10px 14px 12px; gap: 8px;
+    }
+    #start-btn {
+      font-size: 14px; font-weight: 700; padding: 10px 12px; border-radius: 12px;
+      background: linear-gradient(180deg, #4f8ff7 0%, var(--accent-hi) 100%);
+      border-color: var(--accent-hi);
+      box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent);
+    }
+    #start-btn:disabled { background: var(--accent); }
+    #stop-btn { font-weight: 700; border-radius: 12px; }
+    .dialer-footer .controls-row + .controls-row { flex-wrap: wrap; row-gap: 6px; }
+    .dialer-footer label { white-space: nowrap; }
+    .session-limit-input { width: 52px; border-radius: 8px; text-align: center; }
+    .footer-stats {
+      flex-basis: 100%; display: flex; gap: 4px; flex-wrap: wrap;
+      font-size: 10.5px !important; color: var(--muted);
+    }
+    .footer-stats .stat {
+      background: var(--surface-hi); padding: 2px 8px; border-radius: 999px;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .footer-stats .stat b { color: var(--text); font-weight: 700; }
+    .footer-stats .stat.good b { color: var(--success); }
+
+    /* Filters */
+    .top-rail .filter-panel { margin-top: 2px; }
+    .top-rail .filter-toggle {
+      padding: 6px 10px; border-radius: 10px; font-size: 11px; letter-spacing: .05em;
+      color: var(--muted); display: flex; align-items: center; gap: 6px;
+      border: 1px solid transparent; transition: background 120ms, border-color 120ms;
+    }
+    .top-rail #filter-toggle:hover, .top-rail #missed-filter-toggle:hover { background: var(--surface); border-color: var(--line); color: var(--text); }
+    .top-rail .filter-panel.open .filter-toggle { background: var(--surface); border-color: var(--line); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .filter-summary {
+      margin-left: auto; font-size: 10.5px; font-weight: 600; letter-spacing: 0; text-transform: none;
+      color: var(--light); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .filter-summary.active {
+      color: var(--accent-hi); background: var(--accent-light);
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .top-rail .filter-body {
+      padding: 10px 10px 10px; gap: 12px;
+      background: var(--surface); border: 1px solid var(--line); border-top: 0;
+      border-radius: 0 0 12px 12px; box-shadow: var(--shadow-card);
+    }
+    .filter-section > .filter-label { font-size: 10px; color: var(--light); letter-spacing: .07em; margin-bottom: 6px; }
+    .source-checks { gap: 5px; }
+    .source-checks label, .source-checks .src-all {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11.5px; font-weight: 600; padding: 4px 9px 4px 8px; border-radius: 999px;
+      background: var(--bg); color: var(--muted); border: 1px solid var(--line);
+      box-shadow: none; cursor: pointer; transition: background 120ms, color 120ms, border-color 120ms;
+    }
+    .source-checks .src-all { padding-left: 10px; padding-right: 10px; }
+    .source-checks label:hover, .source-checks .src-all:hover { color: var(--text); border-color: var(--border); background: var(--surface); }
+    .source-checks label.checked, .source-checks label:has(input:checked), .source-checks .src-all.checked {
+      background: var(--accent-light); color: var(--accent-hi);
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    .source-checks label.checked .chip-text::before { content: "✓ "; font-weight: 800; }
+    .chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--light); }
+    .chip-dot.src-seo { background: #9fc5e8; box-shadow: inset 0 0 0 1px #0b5394; }
+    .chip-dot.src-nct { background: #674ea7; }
+    .chip-dot.src-mod { background: #783f04; }
+    .chip-dot.src-gads, .chip-dot.src-ads { background: #14b8a6; }
+    .chip-dot.src-lsa { background: #f97316; }
+    .chip-dot.src-angi { background: #ec4899; }
+    .chip-dot.src-missed { background: #ef4444; }
+    .chip-dot.src-gaf, .chip-dot.src-unk { background: var(--light); }
+    .chip-count:empty { display: none; }
+    .chip-count {
+      font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
+      min-width: 16px; padding: 0 5px; border-radius: 999px; text-align: center;
+      background: var(--surface-hi); color: var(--muted);
+    }
+    .source-checks label.checked .chip-count { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent-hi); }
+
+    /* Attempts: one-choice segmented control */
+    .preset-btns {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+      padding: 3px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    }
+    .preset-btns button {
+      border: 0; border-radius: 8px; padding: 5px 0; font-size: 11.5px; font-weight: 600;
+      background: transparent; color: var(--muted); box-shadow: none;
+    }
+    .preset-btns button:hover:not(.active) { background: var(--surface-hi); color: var(--text); border: 0; }
+    .preset-btns button.active {
+      background: var(--surface); color: var(--accent-hi); border: 0;
+      box-shadow: 0 1px 2px rgb(15 23 42 / .12), 0 0 0 1px var(--line);
+    }
+    .filter-stats { font-size: 10.5px; color: var(--muted); margin-top: 0; }
+    #clear-filters-btn {
+      font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+      background: transparent; color: var(--accent-hi); border: 1px solid transparent; box-shadow: none;
+    }
+    #clear-filters-btn:hover { background: var(--accent-light); border-color: transparent; }
+
+    /* Missed-calls chips follow the same look */
+    .mfilter { border-radius: 999px; background: var(--bg); border-color: var(--line); font-size: 11.5px; padding: 4px 10px; }
+    .mfilter.active { background: var(--accent-light); color: var(--accent-hi); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+
+    /* Modal */
+    .modal { border-radius: 16px; border-color: var(--line); box-shadow: 0 24px 48px -12px rgb(15 23 42 / .35); padding: 18px; }
+    .scrim { backdrop-filter: blur(2px); }
+
+    /* Scrollbar */
+    main::-webkit-scrollbar { width: 8px; }
+    main::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+    main::-webkit-scrollbar-thumb:hover { background: var(--border); }
   </style>
 </head>
 <body>
@@ -599,7 +838,7 @@
         </div>
       </div>
       <div class="filter-panel" id="filter-panel">
-        <div class="filter-toggle" id="filter-toggle">Filters <span class="arrow">▾</span> <span id="filter-summary" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--light);margin-left:4px;"></span></div>
+        <div class="filter-toggle" id="filter-toggle">Filters <span class="arrow">▾</span> <span id="filter-summary" class="filter-summary">All leads</span></div>
         <div class="filter-body" id="filter-body">
           <div class="filter-section">
             <div class="filter-label">Lead source</div>
@@ -608,20 +847,20 @@
           <div class="filter-section">
             <div class="filter-label">Attempts</div>
             <div class="preset-btns" id="attempt-presets">
-              <button data-preset="new">New (0)</button>
-              <button data-preset="followup">Follow-up (1-3)</button>
-              <button data-preset="persistent">Persistent (4-7)</button>
-              <button data-preset="all" class="active">All</button>
+              <button data-preset="all" class="active">Any</button>
+              <button data-preset="new" title="Never called">New</button>
+              <button data-preset="followup" title="1–3 attempts">1–3</button>
+              <button data-preset="persistent" title="4 or more attempts">4+</button>
             </div>
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
             <div class="filter-stats" id="filter-stats"></div>
-            <button id="clear-filters-btn" style="font-size:10px;padding:2px 8px;border-radius:4px;box-shadow:none;">Clear filters</button>
+            <button id="clear-filters-btn" type="button">Reset</button>
           </div>
         </div>
       </div>
       <div class="filter-panel" id="missed-filter-panel" style="display:none;">
-        <div class="filter-toggle" id="missed-filter-toggle">Filters <span class="arrow">▾</span> <span id="missed-filter-summary" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--light);margin-left:4px;">All</span></div>
+        <div class="filter-toggle" id="missed-filter-toggle">Filters <span class="arrow">▾</span> <span id="missed-filter-summary" class="filter-summary">All</span></div>
         <div class="filter-body" id="missed-filter-body">
           <div class="missed-filters" id="missed-filters">
             <button class="mfilter active" data-mf="all">All</button>
@@ -872,12 +1111,12 @@
           <input type="checkbox" id="ring-mute-toggle" style="cursor:pointer;">
           🔕 ring
         </label>
-        <span style="font-size:11px;color:var(--muted);">
-          <span id="done-today" style="color:var(--success);font-weight:600;">0</span> today ·
-          <span id="queue-count">0</span> queued ·
-          <span id="t1-count">0</span> new ·
-          <span id="t2-count">0</span> fu ·
-          <span id="session-count">0</span>/<span id="session-limit-display">25</span>
+        <span class="footer-stats">
+          <span class="stat good"><b id="done-today">0</b> today</span>
+          <span class="stat"><b id="queue-count">0</b> queued</span>
+          <span class="stat"><b id="t1-count">0</b> new</span>
+          <span class="stat"><b id="t2-count">0</b> follow-up</span>
+          <span class="stat">session <b id="session-count">0</b>/<b id="session-limit-display">25</b></span>
         </span>
       </div>
     </div>

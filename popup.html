@@ -3137,6 +3137,140 @@
     body.dark-theme .update-btn-secondary {
       color: #fcd34d;
     }
+
+    /* ── Metrics tab (2026-09-28 redesign): team tiles + leaderboard ── */
+    .mx { padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+    .mx-controls { display: flex; gap: 6px; align-items: stretch; }
+    .mx-select {
+      flex: 1; min-width: 0; padding: 7px 10px; font: inherit; font-size: .78rem; font-weight: 600;
+      border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text-main);
+      box-shadow: var(--shadow-sm);
+    }
+    .mx-custom { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px; }
+    .mx-seg { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-hover); border: 1px solid var(--border); flex-shrink: 0; }
+    .mx-seg button {
+      border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: .72rem; font-weight: 700;
+      padding: 4px 10px; border-radius: 7px; cursor: pointer; box-shadow: none;
+    }
+    .mx-seg button[aria-pressed="true"] { background: var(--surface); color: var(--primary); box-shadow: 0 1px 2px rgb(15 23 42 / .15); }
+    .mx-tiles { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+    .mx-tile {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 8px 10px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden;
+    }
+    .mx-tile::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--tile, var(--primary)); }
+    .mx-tile .v { font-size: 1.25rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--text-main); line-height: 1.15; }
+    .mx-tile .l { font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-light); }
+    .mx-tile.active { border-color: var(--tile); }
+    .mx-board { display: flex; flex-direction: column; gap: 5px; }
+    .mx-row {
+      display: grid; grid-template-columns: 26px 30px minmax(0,1fr) auto; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px;
+      box-shadow: var(--shadow-sm);
+    }
+    .mx-row.mine { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), var(--shadow-sm); }
+    .mx-row.gold { background: linear-gradient(90deg, rgb(212 175 55 / .16), var(--surface) 70%); border-color: rgb(212 175 55 / .6); }
+    .mx-rank { font-size: .78rem; font-weight: 800; color: var(--text-light); text-align: center; font-variant-numeric: tabular-nums; }
+    .mx-rank.r1, .mx-rank.r2, .mx-rank.r3 {
+      width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+      color: #fff; font-size: .72rem; box-shadow: inset 0 -2px 0 rgb(0 0 0 / .15);
+    }
+    .mx-rank.r1 { background: linear-gradient(135deg, #f7d774, #d4af37); color: #5b4500; }
+    .mx-rank.r2 { background: linear-gradient(135deg, #e5e7eb, #9ca3af); color: #374151; }
+    .mx-rank.r3 { background: linear-gradient(135deg, #f3c29b, #c47a3f); color: #4a2508; }
+    .mx-avatar {
+      width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+      font-size: .68rem; font-weight: 800; color: #fff; letter-spacing: .02em;
+    }
+    .mx-name { font-size: .8rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+    .mx-you { font-size: .58rem; font-weight: 800; letter-spacing: .06em; padding: 1px 5px; border-radius: 999px; background: var(--primary-light); color: var(--primary); }
+    .mx-star { font-size: .6rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; color: #8a6d12; background: rgb(212 175 55 / .22); white-space: nowrap; }
+    body.dark-theme .mx-star { color: #f7d774; }
+    .mx-bar { height: 4px; border-radius: 999px; background: var(--surface-hover); margin-top: 5px; overflow: hidden; }
+    .mx-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--bar, var(--primary)); }
+    .mx-nums { display: flex; gap: 10px; text-align: right; font-variant-numeric: tabular-nums; }
+    .mx-num .v { font-size: .86rem; font-weight: 600; color: var(--text-muted); line-height: 1.1; }
+    .mx-num .l { font-size: .55rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-light); }
+    .mx-num.key .v { font-size: 1rem; font-weight: 800; color: var(--text-main); }
+    .mx-num.goldv .v { color: #b8901f; }
+    body.dark-theme .mx-num.goldv .v { color: #f7d774; }
+    .mx-empty { padding: 18px 10px; text-align: center; color: var(--text-muted); font-size: .78rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; }
+    .mx-status { font-size: .66rem; color: var(--text-light); text-align: center; }
+
+    /* ── Reports tab (2026-09-28 redesign) ── */
+    .rv2 { display: flex; flex-direction: column; gap: 10px; }
+    .rv2-daybar { display: grid; grid-template-columns: 34px minmax(0,1fr) 34px auto; gap: 6px; align-items: stretch; }
+    .rv2-step-btn {
+      border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); border-radius: 10px;
+      font-size: 1.1rem; font-weight: 700; cursor: pointer; box-shadow: var(--shadow-sm); padding: 0;
+    }
+    .rv2-step-btn:hover { color: var(--primary); border-color: var(--primary); }
+    .rv2-date {
+      min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-main); font: inherit; font-weight: 700; font-size: .85rem; box-shadow: var(--shadow-sm);
+    }
+    .rv2-load { border-radius: 10px; padding: 8px 16px; font-weight: 700; }
+    .rv2-quick { display: flex; align-items: center; gap: 5px; margin-top: -4px; }
+    .rv2-pill {
+      border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+      font: inherit; font-size: .7rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; cursor: pointer; box-shadow: none;
+    }
+    .rv2-pill:hover, .rv2-pill.active { color: var(--primary); border-color: var(--primary); background: var(--primary-light); }
+    .rv2-dayname { margin-left: auto; font-size: .72rem; font-weight: 700; color: var(--text-light); }
+    .rv2-status { padding: 8px 10px; border-radius: 10px; font-size: .76rem; font-weight: 600; }
+    .rv2-summary { display: flex; flex-wrap: wrap; gap: 5px; }
+    .rv2-summary > span { box-shadow: inset 0 0 0 1px var(--border); }
+    .rv2-queue { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 1px 2px 2px 1px; }
+    .rv2-card {
+      position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 9px 10px 9px 13px; box-shadow: var(--shadow-sm); overflow: hidden; flex-shrink: 0;
+    }
+    .rv2-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--rv2-accent, var(--border)); }
+    .rv2-card.is-set { --rv2-accent: var(--success); }
+    .rv2-card.is-unset { --rv2-accent: var(--warn); }
+    .rv2-card.is-na { opacity: .55; }
+    .rv2-head { display: flex; align-items: center; gap: 7px; }
+    .rv2-time {
+      flex-shrink: 0; font-size: .66rem; font-weight: 800; padding: 2px 7px; border-radius: 999px;
+      background: var(--primary-light); color: var(--primary); font-variant-numeric: tabular-nums;
+    }
+    .rv2-title { flex: 1; min-width: 0; font-size: .8rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); }
+    .rv2-title.rv2-open { cursor: pointer; }
+    .rv2-title.rv2-open:hover { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+    .rv2-sub { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin: 4px 0 7px; }
+    .rv2-who { min-width: 0; font-size: .68rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rv2-rep {
+      width: 100%; padding: 6px 8px; font: inherit; font-size: .76rem; font-weight: 600; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text-main);
+    }
+    .rv2-card.is-unset .rv2-rep { border-color: color-mix(in srgb, var(--warn) 60%, var(--border)); }
+    .rv2-empty { text-align: center; padding: 22px 14px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface); }
+    .rv2-empty-icon { font-size: 1.6rem; }
+    .rv2-empty-title { font-weight: 800; font-size: .88rem; margin-top: 4px; color: var(--text-main); }
+    .rv2-empty-sub { font-size: .72rem; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
+    .rv2-progress { height: 6px; background: var(--surface-hover); border-radius: 999px; overflow: hidden; }
+    .rv2-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .rv2-action {
+      display: flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 8px;
+      border-radius: 12px; font-weight: 800; font-size: .8rem;
+    }
+    .rv2-action:disabled { background: var(--surface-hover); color: var(--text-light); border-color: var(--border); box-shadow: none; }
+    .rv2-num {
+      width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+      font-size: .64rem; background: rgb(255 255 255 / .25); flex-shrink: 0;
+    }
+    .rv2-action:disabled .rv2-num { background: var(--border); color: var(--surface); }
+    .rv2-order-panel { padding: 10px; background: var(--primary-light); border: 1px solid var(--primary); border-radius: 12px; }
+    .rv2-more { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+    .rv2-more > summary {
+      list-style: none; cursor: pointer; padding: 9px 12px; font-size: .76rem; font-weight: 700; color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .rv2-more > summary::-webkit-details-marker { display: none; }
+    .rv2-more > summary::after { content: "▾"; margin-left: auto; transition: transform 150ms; }
+    .rv2-more[open] > summary::after { transform: rotate(180deg); }
+    .rv2-more[open] > summary { border-bottom: 1px solid var(--border); }
+    .rv2-more > div { padding: 10px 12px; margin-top: 0 !important; }
   </style>
 </head>
 
@@ -3346,9 +3480,9 @@
       <!-- CSR Metrics Section — per-CSR bookings (Lead Center board formula) +
            inbound/outbound calls (STL leaderboard formula) from /api/csr-metrics -->
       <section id="sec-metrics" class="section">
-        <div style="padding: 12px 0;">
-          <div style="padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
-            <select id="metrics-range" style="width: 100%; margin-bottom: 6px; padding: 7px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text-main); font: inherit; font-size: 0.78rem;">
+        <div class="mx">
+          <div class="mx-controls">
+            <select id="metrics-range" class="mx-select" aria-label="Date range">
               <option value="today" selected>Today</option>
               <option value="yesterday">Yesterday</option>
               <option value="this_week">This week (Sun–Sat)</option>
@@ -3362,28 +3496,18 @@
               <option value="all_time">All time</option>
               <option value="custom">Custom range…</option>
             </select>
-            <div id="metrics-custom" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin-bottom: 6px;">
-              <input id="metrics-from" type="date" title="From" style="min-width: 0; padding: 7px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text-main);">
-              <input id="metrics-to" type="date" title="To" style="min-width: 0; padding: 7px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text-main);">
-            </div>
-            <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 7px;">
-              <span style="font-size: 0.72rem; color: var(--text-muted);">Rank by:</span>
-              <button id="metrics-sort-bookings" class="btn metrics-sort" data-sort="bookings" aria-pressed="true" style="padding: 4px 9px; font-size: 0.72rem;">Bookings</button>
-              <button id="metrics-sort-outbound" class="btn secondary metrics-sort" data-sort="outbound" aria-pressed="false" style="padding: 4px 9px; font-size: 0.72rem;">Outbound</button>
-            </div>
-            <div id="metrics-status" style="min-height: 1.1em; margin-bottom: 7px; font-size: 0.72rem; color: var(--text-muted);"></div>
-            <div style="overflow-x: auto;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 0.76rem;">
-                <thead>
-                  <tr style="color: var(--text-muted); text-align: left; border-bottom: 1px solid var(--border);">
-                    <th style="padding: 6px 4px;">#</th><th style="padding: 6px 4px;">CSR</th>
-                    <th style="padding: 6px 4px; text-align: right;">Booked</th><th style="padding: 6px 4px; text-align: right;">In</th><th style="padding: 6px 4px; text-align: right;">Out</th>
-                  </tr>
-                </thead>
-                <tbody id="metrics-body"></tbody>
-              </table>
+            <div class="mx-seg" role="group" aria-label="Rank by">
+              <button id="metrics-sort-bookings" class="metrics-sort" data-sort="bookings" aria-pressed="true">Bookings</button>
+              <button id="metrics-sort-outbound" class="metrics-sort secondary" data-sort="outbound" aria-pressed="false">Outbound</button>
             </div>
           </div>
+          <div id="metrics-custom" class="mx-custom" style="display: none;">
+            <input id="metrics-from" type="date" title="From" class="mx-select">
+            <input id="metrics-to" type="date" title="To" class="mx-select">
+          </div>
+          <div id="metrics-totals" class="mx-tiles"></div>
+          <div id="metrics-body" class="mx-board"></div>
+          <div id="metrics-status" class="mx-status"></div>
         </div>
       </section>
 
@@ -3391,32 +3515,44 @@
       <section id="sec-reports" class="section">
         <div class="reports-container" style="padding: 12px 0;">
 
-          <div id="reports-v2-section" style="margin-bottom: 14px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
-            <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-bottom: 8px;">
-              <input id="reports-v2-date" type="date" style="min-width: 0; padding: 7px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text-main);">
-              <button id="reports-v2-load" class="btn" style="padding: 7px 16px;">Load</button>
+          <div id="reports-v2-section" class="rv2">
+            <div class="rv2-daybar">
+              <button type="button" class="rv2-step-btn" id="reports-v2-prev" title="Previous day" aria-label="Previous day">‹</button>
+              <input id="reports-v2-date" type="date" class="rv2-date">
+              <button type="button" class="rv2-step-btn" id="reports-v2-next" title="Next day" aria-label="Next day">›</button>
+              <button id="reports-v2-load" class="btn rv2-load" title="Load this day's sales appointments">Load</button>
             </div>
-            <div id="reports-v2-summary" style="display: none; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;"></div>
-            <div id="reports-v2-status" style="display: none; margin-bottom: 8px; padding: 7px 9px; border-radius: var(--radius); font-size: 0.78rem;"></div>
-            <details style="margin-bottom: 8px;">
-              <summary style="cursor: pointer; font-size: 0.78rem; font-weight: 650; color: var(--text-muted);">Paste schedule (auto-assign reps)</summary>
+            <div class="rv2-quick">
+              <button type="button" class="rv2-pill" data-day-offset="0">Today</button>
+              <button type="button" class="rv2-pill" data-day-offset="1">Tomorrow</button>
+              <span id="reports-v2-dayname" class="rv2-dayname"></span>
+            </div>
+            <div id="reports-v2-status" class="rv2-status" style="display: none;"></div>
+            <div id="reports-v2-summary" class="rv2-summary" style="display: none;"></div>
+            <div id="reports-v2-queue" class="rv2-queue" style="display: none;"></div>
+            <div id="reports-v2-empty" class="rv2-empty">
+              <div class="rv2-empty-icon">🗓️</div>
+              <div class="rv2-empty-title">Pick a day to get started</div>
+              <div class="rv2-empty-sub">Loads that day's sales appointments, checks which ones need a Roofr report, and lets you set the rep on each.</div>
+            </div>
+            <div id="reports-v2-progressbar" class="rv2-progress" style="display: none;">
+              <div id="reports-v2-progressbar-fill" style="height: 100%; width: 0%; background: var(--primary); border-radius: 999px; transition: width 0.3s;"></div>
+            </div>
+            <div class="rv2-actions">
+              <button id="reports-v2-assign" class="btn rv2-action" disabled><span class="rv2-num">2</span><span class="rv2-action-text">Assign reps</span></button>
+              <button id="reports-v2-order" class="btn rv2-action" disabled><span class="rv2-num">3</span><span class="rv2-action-text">Order reports</span></button>
+            </div>
+            <div id="reports-v2-order-panel" class="rv2-order-panel" style="display: none;"></div>
+            <details class="rv2-more">
+              <summary>📋 Paste schedule to auto-pick reps</summary>
               <div style="margin-top: 6px;">
                 <textarea id="reports-v2-schedule" placeholder="Paste Summary by Representative..." style="width: 100%; min-height: 110px; resize: vertical; margin-bottom: 6px; padding: 7px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text-main); font: inherit; font-size: 0.75rem;"></textarea>
                 <button id="reports-v2-apply-schedule" class="btn secondary" style="width: 100%;">Apply schedule</button>
                 <div id="reports-v2-apply-results" style="display: none; margin-top: 6px; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.72rem; white-space: pre-wrap; overflow-wrap: anywhere;"></div>
               </div>
             </details>
-            <div id="reports-v2-queue" style="display: none; max-height: 380px; overflow-y: auto; margin-bottom: 8px;"></div>
-            <div id="reports-v2-progressbar" style="display: none; height: 6px; background: var(--surface-hover); border-radius: 3px; margin-bottom: 8px; overflow: hidden;">
-              <div id="reports-v2-progressbar-fill" style="height: 100%; width: 0%; background: var(--primary); border-radius: 3px; transition: width 0.3s;"></div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
-              <button id="reports-v2-assign" class="btn" disabled>Assign reps</button>
-              <button id="reports-v2-order" class="btn" disabled>Order reports</button>
-            </div>
-            <div id="reports-v2-order-panel" style="display: none; margin-bottom: 8px; padding: 10px; background: var(--primary-light); border: 1px solid var(--primary); border-radius: var(--radius);"></div>
-            <details id="reports-v2-advanced">
-              <summary style="cursor: pointer; font-size: 0.78rem; font-weight: 650; color: var(--text-muted);">Advanced</summary>
+            <details id="reports-v2-advanced" class="rv2-more">
+              <summary>⚙️ Advanced</summary>
               <div style="margin-top: 8px;">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
                   <button id="reports-v2-scan-directory" class="btn secondary" style="font-size: 0.75rem; padding: 5px 9px;">Scan directory</button>
@@ -3450,176 +3586,6 @@
             </details>
           </div>
 
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <div style="font-size: 0.95rem; font-weight: 800; color: var(--text-main);">Reports Batch</div>
-            <button id="open-batch-dashboard" class="btn secondary" style="font-size: 0.75rem; padding: 5px 10px;">
-              Dashboard ↗
-            </button>
-          </div>
-
-          <!-- Status Banner (shared) -->
-          <div id="reports-status" class="status-banner"
-            style="display:none; padding: 10px; margin-bottom: 12px; border-radius: var(--radius); font-size: 0.9rem;">
-          </div>
-
-          <!-- ===================== -->
-          <!-- CALENDAR BATCH PANEL -->
-          <!-- ===================== -->
-          <div id="reports-panel-calendar" class="reports-panel">
-            <!-- Schedule Input -->
-            <div id="batch-schedule-card" style="margin-bottom: 10px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
-                <label style="font-weight: 700; font-size: 0.9rem;">Schedule Report</label>
-                <button id="toggle-batch-schedule" class="btn secondary" style="display: none; font-size: 0.72rem; padding: 4px 9px;">Edit</button>
-              </div>
-              <div id="batch-schedule-summary" style="display: none; font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
-              <div id="batch-schedule-body">
-              <textarea id="batch-schedule-input" placeholder="Travis Jones (2)
-Available:
-2pm - 5pm
-8am-11am: 10545 E Fanfol Ln, SCOTTSDALE, AZ 85258 (41yrs Tile)
-11am-1pm: 178 Cedar Ave, MIAMI, AZ 85539 (Shingle)"
-                style="width: 100%; height: 92px; padding: 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text-main); font-family: monospace; font-size: 0.8rem; resize: vertical;"></textarea>
-
-                <!-- Parse Button -->
-                <button id="parse-batch-schedule" class="btn secondary" style="width: 100%; margin-top: 8px;">
-                  Parse Schedule
-                </button>
-              </div>
-            </div>
-
-            <!-- Background Mode Toggle -->
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 8px 12px; background: var(--surface-hover); border-radius: var(--radius);">
-              <div>
-                <span style="font-weight: 600; font-size: 0.85rem;">Background Mode</span>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">Run automation without switching tabs</div>
-              </div>
-              <label class="switch" style="margin: 0;">
-                <input type="checkbox" id="batch-background-mode">
-                <span class="slider"></span>
-              </label>
-            </div>
-
-            <!-- Parsed Jobs Display -->
-            <div id="batch-parsed-jobs"
-              style="display: none; margin-bottom: 10px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); max-height: 260px; overflow-y: auto;">
-              <div style="font-weight: 700; margin-bottom: 6px; font-size: 0.85rem;">Review Queue</div>
-              <div id="batch-jobs-list" style="font-size: 0.85rem;"></div>
-            </div>
-
-            <!-- Batch Review Controls -->
-            <div id="batch-review-controls" style="display: none; margin-bottom: 12px;">
-              <button id="open-review-batch" class="btn secondary" style="width: 100%; padding: 10px; margin-bottom: 8px;">
-                Open All for Review
-              </button>
-              <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-                <button id="review-select-all" class="btn secondary" style="flex: 1; font-size: 0.8rem; padding: 4px;">Select All</button>
-                <button id="review-deselect-all" class="btn secondary" style="flex: 1; font-size: 0.8rem; padding: 4px;">Deselect All</button>
-                <button id="review-close-tabs" class="btn secondary" style="flex: 1; font-size: 0.8rem; padding: 4px;">Close Tabs</button>
-              </div>
-            </div>
-
-            <!-- Run Batch Button -->
-            <button id="run-batch-automation" class="btn" style="width: 100%; padding: 12px; display: none;">
-              Execute Approved
-            </button>
-
-            <!-- Automation Control Buttons -->
-            <div id="batch-control-buttons" style="display: none; gap: 8px; margin-top: 8px;">
-              <button id="stop-batch-automation" class="btn" style="flex: 1; padding: 10px; background: var(--danger, #ef4444); border: none;">
-                Stop Automation
-              </button>
-              <button id="restart-batch-automation" class="btn" style="flex: 1; padding: 10px; background: var(--warning, #f59e0b); border: none;">
-                Restart from Beginning
-              </button>
-            </div>
-
-
-            <!-- Batch Log (click to expand) -->
-            <div id="batch-log"
-              style="margin-top: 12px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); max-height: 120px; overflow-y: auto; font-family: monospace; font-size: 0.75rem; display: none; cursor: pointer; position: relative;"
-              title="Click to expand logs">
-              <div id="batch-log-content"></div>
-              <div id="batch-log-expand-hint" style="position: sticky; bottom: 0; left: 0; right: 0; text-align: center; padding: 4px; background: linear-gradient(transparent, var(--surface)); color: var(--primary); font-size: 0.7rem; font-weight: 600;">
-                ▼ Click to expand logs ▼
-              </div>
-            </div>
-          </div>
-
-          <!-- ================== -->
-          <!-- JOB CARDS PANEL -->
-          <!-- ================== -->
-          <div id="reports-panel-job-cards" class="reports-panel" style="display: none;">
-            <!-- Job Info Display -->
-            <div id="reports-job-info" class="job-info-card"
-              style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 16px;">
-              <div style="font-weight: 700; margin-bottom: 8px; color: var(--text-main);">Current Job</div>
-              <div id="reports-job-address" style="font-size: 0.95rem; color: var(--text-muted);">No job selected</div>
-              <div id="reports-job-owner" style="font-size: 0.85rem; color: var(--text-light); margin-top: 4px;"></div>
-            </div>
-
-            <!-- Rep Selection -->
-            <div class="rep-selection" style="margin-bottom: 16px;">
-              <label style="display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem;">Select Rep (Job
-                Owner)</label>
-              <select id="reports-rep-select"
-                style="width: 100%; padding: 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text-main);">
-                <option value="">-- Keep current owner --</option>
-              </select>
-            </div>
-
-            <!-- Automation Controls -->
-            <div class="automation-controls" style="display: flex; flex-direction: column; gap: 8px;">
-              <button id="run-full-automation" class="btn" style="width: 100%; padding: 12px; font-size: 1rem;">
-                Run Full Report Automation
-              </button>
-
-              <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; margin: 8px 0;">
-                Or run individual steps:
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button id="step-select-owner" class="btn secondary" style="font-size: 0.85rem;">
-                  1. Set Owner
-                </button>
-                <button id="step-measurements" class="btn secondary" style="font-size: 0.85rem;">
-                  2. Measurements
-                </button>
-                <button id="step-roofr-report" class="btn secondary" style="font-size: 0.85rem;">
-                  3. Roofr Report
-                </button>
-                <button id="step-confirm-map" class="btn secondary" style="font-size: 0.85rem;">
-                  4. Confirm Map
-                </button>
-                <button id="step-all-secondary" class="btn secondary" style="font-size: 0.85rem; grid-column: span 2;">
-                  5. All Secondary + Next
-                </button>
-              </div>
-            </div>
-
-            <!-- Progress Log -->
-            <div id="reports-log"
-              style="margin-top: 16px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; display: none;">
-            </div>
-
-            <!-- Instructions -->
-            <div
-              style="margin-top: 16px; padding: 12px; background: var(--primary-light); border-radius: var(--radius); font-size: 0.85rem; color: var(--text-muted);">
-              <div style="font-weight: 700; margin-bottom: 6px;">How to use:</div>
-              <ol style="margin: 0; padding-left: 18px; line-height: 1.6;">
-                <li>Open a job card in Roofr (click on a job in list view)</li>
-                <li>Select the rep from the dropdown above (optional)</li>
-                <li>Click "Run Full Report Automation"</li>
-                <li>The extension will automatically:<br />
-                  &bull; Set the job owner<br />
-                  &bull; Click Measurements tab<br />
-                  &bull; Click Roofr report<br />
-                  &bull; Confirm the location<br />
-                  &bull; Select All structures + Next
-                </li>
-              </ol>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -4267,22 +4233,6 @@ Available:
     </div>
 
     <!-- Batch Logs Modal -->
-    <div id="batch-logs-modal" class="modal hidden">
-      <div class="modal-content" style="max-width: 700px; max-height: 85vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h3 style="margin: 0; font-size: 1.1rem;">Batch Automation Logs</h3>
-          <button id="close-batch-logs-modal" class="modal-close">&times;</button>
-        </div>
-        <div id="batch-logs-modal-content"
-          style="flex: 1; overflow-y: auto; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; line-height: 1.5;">
-        </div>
-        <div style="margin-top: 12px; display: flex; gap: 8px;">
-          <button id="copy-batch-logs" class="btn secondary" style="flex: 1;">Copy Logs</button>
-          <button id="clear-batch-logs" class="btn secondary" style="flex: 1;">Clear Logs</button>
-        </div>
-      </div>
-    </div>
-
   </div>
   <script src="reports-batch.js"></script>
   <script type="module" src="popup.js"></script>

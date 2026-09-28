@@ -1,12 +1,12 @@
 {
-  "version": "3.2.72",
+  "version": "3.2.73",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T17:30:05.445Z",
+  "release_date": "2026-09-28T18:11:48.202Z",
   "changelog": [
-    "Reports: ordering a report — verify the pin and click Confirm; the extension clicks All → Next → Order report → Done for you",
-    "Reports: no more \"Open a Roofr tab first\" — it opens one in the background",
-    "Address search: toast says what happened; several jobs at one address are listed so you can pick another"
+    "Dialer: fresh look — cleaner lead cards, better filters (short names, counts, All sources), source colors match the Lead Tracking sheet",
+    "Metrics: team totals + leaderboard with medals and progress bars",
+    "Reports: pick a day with ‹ › / Today / Tomorrow (loads automatically), numbered steps; old Reports Batch removed"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.72/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.72"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.73/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.73"
 }
