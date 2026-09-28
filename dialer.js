@@ -192,7 +192,8 @@
   const LSA_FILTERS_KEY = "lsaLeadFilters";
   // SINGLE source of truth for the status-bucket values. Two copies of this list
   // drifted in v3.2.17 and silently emptied the queue — never inline it again.
-  const LSA_STATUS_VALUES = ["dial", "message", "done", "all"];
+  // No "dial": leads with a phone live in the sheet dialer now (Travis 2026-09-28).
+  const LSA_STATUS_VALUES = ["message", "done", "all"];
   // Archive state is ORTHOGONAL to the Call/Message/Done buckets — it answers
   // "has someone already closed this thread in LeadTruffle", not "what action
   // does this need" — so it gets its own control rather than a fifth entry in
@@ -200,7 +201,7 @@
   const LSA_ARCHIVE_VALUES = ["all", "archived", "active"];
   let _lsaArchiveFilter = "all";
   let _lsaCompanyFilter = "all";
-  let _lsaStatusFilter = "dial";
+  let _lsaStatusFilter = "message";
 
   // ── Needs Rescheduled state (fully ISOLATED from the leads/missed dialer) ──
   // This flow never sets `currentLead`, never calls advanceToNext/onCallEnded/
@@ -430,6 +431,12 @@
     els.log.appendChild(line);
     els.log.scrollTop = els.log.scrollHeight;
     while (els.log.children.length > 500) els.log.removeChild(els.log.firstChild);
+    // Log is in a pop-up now — flag errors on the 📜 button so they aren't missed.
+    // (Looked up here, not via a const: log() runs before the pop-up wiring does.)
+    if (kind === "err" && !document.getElementById("log-scrim")?.classList.contains("show")) {
+      const dot = document.getElementById("log-err-dot");
+      if (dot) dot.hidden = false;
+    }
 
     // ASCII-safe versions for clipboard + sheet
     const safeMsg = asciiSafe(msg);
@@ -1350,17 +1357,23 @@
         // Auto-Lost backstop: a lead that reached the 7-call cadence without a
         // terminal disposition gets auto-disposed as Unqualified (note + LT
         // writeback). Fire once per lead per session, before the due-gate filter.
-        const exhausted = rows.filter(row => (row.call_count || 0) >= 7 && !_lsaAutoLost.has(lsaLeadId(row)));
+        // PHONELESS ONLY (Travis 2026-09-28): a lead with a number is ingested
+        // into the Form Leads sheet (sync-form-leads) and dialed there — the LSA
+        // tab keeps only message-thread leads, and a lead leaves the moment
+        // LeadTruffle or Google gives it a phone. Filtered BEFORE the auto-Lost
+        // backstop so sheet-owned leads are never auto-lost from this side.
+        const phoneless = rows.filter(row => !lsaHasPhone(row));
+        const exhausted = phoneless.filter(row => (row.call_count || 0) >= 7 && !_lsaAutoLost.has(lsaLeadId(row)));
         for (const row of exhausted) { _lsaAutoLost.add(lsaLeadId(row)); lsaAutoLose(row); }
         // Keep EVERY row the server returned. The cadence gate (under 7 attempts
         // and due now) decides what may be auto-DIALED and lives in
         // lsaAvailableRows — it must not prune the list itself, or the Done and
         // Message buckets would silently lose resting and exhausted leads, which
         // are exactly the ones a rep opens those buckets to look at.
-        _lsaAll = rows;
-        log(`LSA leads loaded: ${_lsaAll.length}`, "ok", "lsa");
+        _lsaAll = phoneless;
+        log(`LSA leads loaded: ${_lsaAll.length} without a phone (${rows.length - _lsaAll.length} with a phone are in the sheet dialer)`, "ok", "lsa");
         if (_lsaPhase === "idle") renderLsaQueue();
-        else updateLsaBadge(_lsaAll.length);
+        else updateLsaBadge(_lsaAll.filter(row => lsaStatusBucket(row) === "message").length);
         return;
       }
       // ── Needs Rescheduled tab: pull Roofr jobs in "Needs Rescheduled" ──
@@ -2698,6 +2711,23 @@
     }
   });
 
+  // Event log pop-up: 📜 in the header opens it; Esc / ✕ / backdrop close it.
+  // A red dot on 📜 flags an error logged while the pop-up was closed.
+  const logScrim = document.getElementById("log-scrim");
+  const logErrDot = document.getElementById("log-err-dot");
+  function openLogPopup() {
+    logScrim?.classList.add("show");
+    if (logErrDot) logErrDot.hidden = true;
+    if (els.log) els.log.scrollTop = els.log.scrollHeight;
+  }
+  function closeLogPopup() { logScrim?.classList.remove("show"); }
+  document.getElementById("log-open-btn")?.addEventListener("click", openLogPopup);
+  document.getElementById("log-close-btn")?.addEventListener("click", closeLogPopup);
+  logScrim?.addEventListener("click", (e) => { if (e.target === logScrim) closeLogPopup(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && logScrim?.classList.contains("show")) { e.stopPropagation(); closeLogPopup(); }
+  }, true);
+
   els.logClearBtn?.addEventListener("click", () => {
     els.log.innerHTML = "";
     _logHistory.length = 0;
@@ -3713,7 +3743,6 @@
     const statusSelect = document.getElementById("lsa-status-select");
     const companies = ["Arizona Roofers", "Arizona Roof Pros"];
     const statuses = [
-      ["dial", "📞 Call"],
       ["message", "💬 Message"],
       // Not "Booked/Lost" — a lead lands here on a Roofr job alone, or because
       // it moved into the Speed to Lead sheet dialer. The label has to cover
@@ -3791,7 +3820,7 @@
     // buckets, so picking "message" coerced to the dead "callable" value, which
     // matches no row — the queue emptied and picking "dial" again fell into the
     // same trap, so it could not be recovered without a reload.
-    if (!LSA_STATUS_VALUES.includes(status)) status = "dial";
+    if (!LSA_STATUS_VALUES.includes(status)) status = "message";
     if (_lsaPhase !== "idle") { lsaPopulateFilterSelects(); return; }
     _lsaStatusFilter = status;
     lsaPersistFilters();
@@ -3802,11 +3831,11 @@
     try {
       const saved = (await chrome.storage.local.get([LSA_FILTERS_KEY]))?.[LSA_FILTERS_KEY] || {};
       _lsaCompanyFilter = ["all", "Arizona Roofers", "Arizona Roof Pros"].includes(saved.company) ? saved.company : "all";
-      _lsaStatusFilter = LSA_STATUS_VALUES.includes(saved.status) ? saved.status : "dial";
+      _lsaStatusFilter = LSA_STATUS_VALUES.includes(saved.status) ? saved.status : "message";
       _lsaArchiveFilter = LSA_ARCHIVE_VALUES.includes(saved.archive) ? saved.archive : "all";
     } catch (_) {
       _lsaCompanyFilter = "all";
-      _lsaStatusFilter = "dial";
+      _lsaStatusFilter = "message";
       _lsaArchiveFilter = "all";
     }
     await lsaRestoreArchived();

@@ -1,12 +1,11 @@
 {
-  "version": "3.2.73",
+  "version": "3.2.74",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T18:11:48.202Z",
+  "release_date": "2026-09-28T18:36:26.547Z",
   "changelog": [
-    "Dialer: fresh look — cleaner lead cards, better filters (short names, counts, All sources), source colors match the Lead Tracking sheet",
-    "Metrics: team totals + leaderboard with medals and progress bars",
-    "Reports: pick a day with ‹ › / Today / Tomorrow (loads automatically), numbered steps; old Reports Batch removed"
+    "Dialer: event log is now a 📜 button with a pop-up (red dot = new error)",
+    "LSA tab now only holds leads with no phone number — as soon as a lead gets a number it moves to the Leads sheet dialer"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.73/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.73"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.74/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.74"
 }

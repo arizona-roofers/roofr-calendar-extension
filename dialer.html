@@ -806,6 +806,19 @@
     main::-webkit-scrollbar { width: 8px; }
     main::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
     main::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+    /* Event log pop-up */
+    .header-actions { display: flex; gap: 6px; align-items: center; }
+    #log-open-btn {
+      position: relative; width: 32px; height: 32px; padding: 0; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; box-shadow: none; font-size: 14px;
+    }
+    .log-err-dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--surface); }
+    .log-modal { width: 94%; max-width: 560px; max-height: 82vh; display: flex; flex-direction: column; gap: 10px; }
+    .log-modal-head { display: flex; align-items: center; gap: 8px; }
+    .log-tool { font-size: 11px; padding: 4px 10px; border-radius: 999px; box-shadow: none; }
+    .log-modal #log { margin-top: 0; flex: 1; min-height: 200px; max-height: none; overflow-y: auto; }
   </style>
 </head>
 <body>
@@ -819,7 +832,10 @@
           <span id="bridge-pill" class="pill"><span class="dot"></span><span class="label">Bridge: idle</span></span>
         </div>
       </div>
-      <button id="settings-btn" title="Open extension options">⚙</button>
+      <div class="header-actions">
+        <button id="log-open-btn" title="Event log">📜<span id="log-err-dot" class="log-err-dot" hidden></span></button>
+        <button id="settings-btn" title="Open extension options">⚙</button>
+      </div>
     </header>
 
     <div class="top-rail" id="top-rail">
@@ -1083,12 +1099,6 @@
         <ul id="wc-queue" style="list-style:none;margin:0;padding:0;"></ul>
       </div>
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px 0;">
-        <h2 style="margin:0;">Event log</h2>
-        <button id="log-clear-btn" style="font-size:11px;padding:3px 8px;border-radius:4px;box-shadow:none;">✗ Clear</button>
-        <button id="log-copy-btn" style="font-size:11px;padding:3px 8px;border-radius:4px;box-shadow:none;">📋 Copy</button>
-      </div>
-      <div id="log"></div>
     </main>
 
     <div class="dialer-footer controls" id="dialer-footer">
@@ -1119,6 +1129,21 @@
           <span class="stat">session <b id="session-count">0</b>/<b id="session-limit-display">25</b></span>
         </span>
       </div>
+    </div>
+  </div>
+
+  <!-- Event log lives in a pop-up (Travis 2026-09-28) — the queue page stays clean. -->
+  <div class="scrim" id="log-scrim">
+    <div class="modal log-modal" role="dialog" aria-label="Event log">
+      <div class="log-modal-head">
+        <h3 style="margin:0;">Event log</h3>
+        <div style="display:flex;gap:6px;margin-left:auto;">
+          <button id="log-copy-btn" class="log-tool">📋 Copy</button>
+          <button id="log-clear-btn" class="log-tool">✗ Clear</button>
+          <button id="log-close-btn" class="log-tool" title="Close (Esc)">✕</button>
+        </div>
+      </div>
+      <div id="log"></div>
     </div>
   </div>
 
