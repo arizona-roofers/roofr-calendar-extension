@@ -7578,7 +7578,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const primaryCity = cityList[0];
-        let region = CONFIG.getRegionForCity(primaryCity);
+
+        // Pin first: the region comes from the TERRITORY MAP the address sits in
+        // (service-area.html → territories), not the town name. The city lists
+        // put up-north towns like Cottonwood/Prescott in PHX, so an address there
+        // stayed on PHX while its booked jobs (GPS-classified) counted as NORTH.
+        // City lists remain the fallback for city/name/phone searches (no pin).
+        if (!hasFiniteCoords(window.__selectedAddrCoords)) {
+            const pin = await resolveAddressCoordsForReco(text);
+            // An input edit mid-resolve means this pin belongs to an old query —
+            // applying it would geo-rank address B from address A's coordinates.
+            if (pin && (addrInput?.value?.trim() || "") === text) window.__selectedAddrCoords = pin;
+        }
+        const pinCoords = window.__selectedAddrCoords;
+        let region = (hasFiniteCoords(pinCoords)
+            ? CONFIG.territoryForPoint(pinCoords.lat, pinCoords.lng, _serviceAreaGeo?.territories)
+            : null) || CONFIG.getRegionForCity(primaryCity);
 
         // If city not in any region, prompt user to select one
         if (!region) {
@@ -7625,13 +7640,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await sendFindCommand({ type: 'CLEAR_HIGHLIGHT' });
         await sendFindCommand({ type: 'HIGHLIGHT_CITY', city: primaryCity });
-
-        if (!hasFiniteCoords(window.__selectedAddrCoords)) {
-            const pin = await resolveAddressCoordsForReco(text);
-            // An input edit mid-resolve means this pin belongs to an old query —
-            // applying it would geo-rank address B from address A's coordinates.
-            if (pin && (addrInput?.value?.trim() || "") === text) window.__selectedAddrCoords = pin;
-        }
 
         const allCandidates = findBestSlotStacking(
             primaryCity, state.weekDays, state.allEvents, state.availability, state.currentRegion
@@ -7820,6 +7828,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             _serviceAreaGeo = {
                 polygons: d.service_polygons,
+                territories: d.territory_polygons || null,   // region picker (address search)
                 areaEnabled: d.area_enabled || {},
                 precedence: Array.isArray(d.precedence) ? d.precedence : null,
                 bufferMi: Number.isFinite(Number(d.buffer_mi)) ? Number(d.buffer_mi) : null,

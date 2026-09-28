@@ -1,11 +1,10 @@
 {
-  "version": "3.2.75",
+  "version": "3.2.76",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T18:53:35.143Z",
+  "release_date": "2026-09-28T19:13:02.930Z",
   "changelog": [
-    "Scanner: fresh look — open slots stand out (green rail + Reserve), full slots fade back, overbooked stays red",
-    "Scanner: region filter is one switch; Capacity / Expand All no longer run off the edge"
+    "Address search picks the region from the territory map (service-area editor) — Cottonwood, Prescott, Sedona, Payson addresses now open North (Wednesday up-north slots)"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.75/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.75"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.76/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.76"
 }

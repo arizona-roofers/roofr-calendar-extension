@@ -861,6 +861,29 @@ export const CONFIG = {
   // exactly like Flagstaff and the CSR reads a decline script to a real job.
   SERVICE_AREA_BUFFER_MI_DEFAULT: 2,
 
+  // TERRITORIES = which region/rep pool an address belongs to (Travis 2026-09-28:
+  // "service-area.html is how the regions are selected"). The published shapes
+  // come from /api/service-area `territory_polygons` (editor → territories mode);
+  // these bundled copies are the offline fallback and equal the 34.07 / 32.64
+  // latitude bands the calendar GPS classification already uses.
+  TERRITORY_POLYGONS: {
+    PHX:   [[34.07, -115.05], [34.07, -108.9], [32.64, -108.9], [32.64, -115.05]],
+    NORTH: [[37.1, -115.05], [37.1, -108.9], [34.07, -108.9], [34.07, -115.05]],
+    SOUTH: [[32.64, -115.05], [32.64, -108.9], [31.15, -108.9], [31.15, -115.05]],
+  },
+
+  /** Region (PHX/NORTH/SOUTH) whose territory contains the point, or null. */
+  territoryForPoint(lat, lng, polys) {
+    const P = polys && Object.keys(polys).length ? polys : this.TERRITORY_POLYGONS;
+    const la = parseFloat(lat), ln = parseFloat(lng);
+    if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
+    const known = ['PHX', 'NORTH', 'SOUTH'];
+    for (const k of [...known, ...Object.keys(P).filter(k => !known.includes(k))]) {
+      if (Array.isArray(P[k]) && P[k].length >= 3 && this.pointInPolygon(la, ln, P[k])) return k;
+    }
+    return null;
+  },
+
   pointInPolygon(lat, lng, poly) {
     let inside = false;
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
