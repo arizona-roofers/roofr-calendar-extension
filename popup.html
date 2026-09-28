@@ -3271,6 +3271,97 @@
     .rv2-more[open] > summary::after { transform: rotate(180deg); }
     .rv2-more[open] > summary { border-bottom: 1px solid var(--border); }
     .rv2-more > div { padding: 10px 12px; margin-top: 0 !important; }
+
+    /* ── Scanner tab polish (2026-09-28) ──
+       Overrides only; every class is still the one popup.js renders, so behavior
+       is untouched. Idea: OPEN slots should pop, FULL slots should recede. */
+
+    /* Toolbar: region filter as one segmented control; Capacity/Expand stay in
+       the row instead of overflowing past the panel edge. */
+    #scanner-toolbar .filters-row { flex-wrap: wrap; row-gap: 6px; align-items: center; }
+    #scanner-toolbar .filters-row > div:last-child { flex-shrink: 0; }
+    #scanner-toolbar .region-pills {
+      gap: 2px; padding: 3px; border-radius: 10px;
+      background: var(--surface-hover); border: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    #scanner-toolbar .region-pill {
+      border: 0; background: transparent; border-radius: 7px;
+      padding: 4px 9px; font-size: 0.76rem; color: var(--text-muted);
+    }
+    #scanner-toolbar .region-pill:hover { background: var(--surface); border-color: transparent; }
+    #scanner-toolbar .region-pill.active {
+      background: var(--surface); color: var(--primary);
+      box-shadow: 0 1px 2px rgb(15 23 42 / .14), 0 0 0 1px var(--border);
+    }
+    #scanner-toolbar #refreshCapacityBtn, #scanner-toolbar #toggleAll {
+      border-radius: 999px; padding: 4px 10px; font-size: 0.72rem !important; font-weight: 700;
+    }
+    #scanner-toolbar #addrInput { border-radius: 10px; }
+
+    /* Day cards */
+    #sec-scanner .day-card {
+      border-radius: 14px; border: 1px solid var(--border);
+      padding: 9px 12px; margin-bottom: 7px;
+      box-shadow: 0 1px 2px rgb(15 23 42 / .05);
+      position: relative; overflow: hidden;
+    }
+    #sec-scanner .day-card:hover { box-shadow: 0 6px 16px -8px rgb(15 23 42 / .22); }
+    #sec-scanner .day-card.week-stripe-b { background-color: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%); }
+    body.dark-theme #sec-scanner .day-card.week-stripe-b { background-color: color-mix(in srgb, var(--surface) 90%, var(--primary) 10%); }
+    #sec-scanner .day-card.today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), 0 6px 16px -10px var(--primary); }
+    #sec-scanner .day-card.past { opacity: .55; }
+    #sec-scanner .day-card.day-cutoff::before { border-radius: 0; height: 3px; }
+
+    /* Header: weekday bold, date quieter, chevron softer */
+    #sec-scanner .card-header { border-radius: 10px; }
+    #sec-scanner .day-name { letter-spacing: .02em; }
+    #sec-scanner .date-title { font-weight: 700; }
+    #sec-scanner .collapse-chevron { color: var(--text-light); font-size: .7rem; }
+    #sec-scanner .badge { border-radius: 999px; padding: 2px 8px; font-size: .66rem; letter-spacing: .04em; }
+    #sec-scanner .badge.success { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 35%, transparent); }
+    #sec-scanner .badge.danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 35%, transparent); }
+
+    /* Block rows: color rail on the left instead of heavy boxes */
+    #sec-scanner .blocks-grid { gap: 4px; }
+    #sec-scanner .block-item {
+      position: relative; border-radius: 9px; padding: 5px 10px 5px 13px;
+      background: var(--surface); border: 1px solid var(--border); box-shadow: none;
+      font-size: .84rem;
+    }
+    #sec-scanner .block-item::before {
+      content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+      background: var(--success);
+    }
+    /* Full: recede. Over: still loud — that one needs attention. */
+    #sec-scanner .block-item.full {
+      background: var(--surface-hover); border-color: var(--border); box-shadow: none;
+    }
+    #sec-scanner .block-item.full::before { background: color-mix(in srgb, var(--danger) 55%, var(--border)); }
+    #sec-scanner .block-item.full .time-slot,
+    #sec-scanner .block-item.full .block-context,
+    #sec-scanner .block-item.full .sheet-cap { opacity: .7; }
+    #sec-scanner .block-item.over {
+      background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 50%, transparent); box-shadow: none;
+    }
+    #sec-scanner .block-item.over::before { background: var(--danger); }
+    #sec-scanner .block-item.suggested { box-shadow: none; }
+    #sec-scanner .block-item.suggested::before { background: var(--warn); }
+    #sec-scanner .block-item.slot-reserved::before { background: #6366f1; }
+    #sec-scanner .block-item:has(.stat-muted)::before { background: var(--border); }
+
+    #sec-scanner .time-slot { font-variant-numeric: tabular-nums; min-width: 78px; }
+    #sec-scanner .sheet-cap {
+      font-size: .72rem; font-variant-numeric: tabular-nums; padding: 1px 7px; border-radius: 999px;
+      background: var(--surface-hover); color: var(--text-muted);
+    }
+    #sec-scanner .block-context { opacity: .85; }
+    #sec-scanner .reserve-slot-btn { border-radius: 999px; padding: 3px 10px; font-weight: 700; }
+
+    /* Footer */
+    #sec-scanner .card-footer { border-top: 1px dashed var(--border); padding-top: 7px; margin-top: 7px; }
+    #sec-scanner .card-cap, #sec-scanner .card-booked { font-size: .74rem; font-variant-numeric: tabular-nums; }
+    #sec-scanner .copy-day-btn { border-radius: 999px; font-size: .72rem; }
   </style>
 </head>
 

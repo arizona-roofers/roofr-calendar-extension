@@ -1,11 +1,11 @@
 {
-  "version": "3.2.74",
+  "version": "3.2.75",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T18:36:26.547Z",
+  "release_date": "2026-09-28T18:53:35.143Z",
   "changelog": [
-    "Dialer: event log is now a 📜 button with a pop-up (red dot = new error)",
-    "LSA tab now only holds leads with no phone number — as soon as a lead gets a number it moves to the Leads sheet dialer"
+    "Scanner: fresh look — open slots stand out (green rail + Reserve), full slots fade back, overbooked stays red",
+    "Scanner: region filter is one switch; Capacity / Expand All no longer run off the edge"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.74/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.74"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.75/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.75"
 }
