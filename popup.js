@@ -1242,11 +1242,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         autoExpandDays: false  // Default to collapsed
     };
 
-    function showToast(msg) {
+    let _toastTimer = null;
+    function showToast(msg, ms = 2000) {
         if (!toast) return;
         toast.textContent = msg;
         toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2000);
+        clearTimeout(_toastTimer); // an older toast's timer must not hide this one early
+        _toastTimer = setTimeout(() => toast.classList.remove('show'), ms);
+    }
+
+    // Several Roofr jobs share the searched address (repeat customer, repair after a replacement).
+    // The newest is already open; list them all so the rep can switch with one click.
+    let _goFlowRunning = false;
+    let _pendingJobsAtAddress = null;
+    function showJobsAtAddress(jobs, openedJob) {
+        if (!verifiedAddressesList || !Array.isArray(jobs) || jobs.length < 2) return;
+        // Go's finally collapses this dropdown — defer until Go is done (the live lookup usually lands after it).
+        if (_goFlowRunning) { _pendingJobsAtAddress = { jobs, openedJob }; return; }
+        verifiedAddressesList.innerHTML = '';
+        _suggestionItems = [];
+        _activeSuggestionIndex = -1;
+        const hdr = document.createElement('div');
+        hdr.className = 'suggestion-section-header';
+        hdr.textContent = `${jobs.length} jobs at this address — newest opened`;
+        verifiedAddressesList.appendChild(hdr);
+        for (const job of jobs) {
+            const el = document.createElement('div');
+            el.className = 'suggestion-item sheet-match';
+            const who = _escapeHtml((job.Customer || '').trim() || 'No customer');
+            const meta = [job.Stage, String(job['Created at'] || '').slice(0, 10) && `created ${String(job['Created at']).slice(0, 10)}`]
+                .filter(Boolean).map(_escapeHtml).join(' · ');
+            const opened = job === openedJob ? ' <span class="match-meta">(open)</span>' : '';
+            el.innerHTML = `<div class="match-primary">${who}${opened}</div><div class="match-meta">${meta}</div>`;
+            el.addEventListener('mousedown', (e) => e.preventDefault());
+            el.addEventListener('click', () => {
+                verifiedAddressesList.classList.add('hidden');
+                openJobCard(job);
+            });
+            verifiedAddressesList.appendChild(el);
+            _suggestionItems.push(el);
+        }
+        verifiedAddressesList.classList.remove('hidden');
     }
 
     function normalizeRepIdentityName(name) {
@@ -7959,6 +7995,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const originalBtnContent = addrGoBtn.innerHTML;
             addrGoBtn.innerHTML = '<span class="btn-spinner"></span>';
             addrGoBtn.disabled = true;
+            _goFlowRunning = true; // set right before try so the finally always clears it
+            _pendingJobsAtAddress = null;
 
             try {
             // If user selected a known job from DB suggestion, open it directly
@@ -8696,7 +8734,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 return c.key === q.key && (!q.city || !c.city || c.city === q.city);
                             });
                             hits.sort((a, b) => String(b['Created at'] || '').localeCompare(String(a['Created at'] || '')));
-                            return hits[0] || null;
+                            return hits; // newest first
+                        };
+                        // Toast + (when several jobs share the address) a one-click list of all of them.
+                        const reportExistingJobs = (jobs, source) => {
+                            const opened = jobs[0];
+                            addLog(`Roofr: existing job found (${source}) — ${opened.Customer || ''} (${opened.Address || ''})${jobs.length > 1 ? `, ${jobs.length} jobs at this address` : ''} — opened job card`);
+                            if (jobs.length > 1) {
+                                showToast(`${jobs.length} jobs at this address — opened the newest. Pick another from the list.`, 6000);
+                                showJobsAtAddress(jobs, opened);
+                            } else {
+                                showToast(`Existing job opened in Roofr — ${opened.Customer || opened.Address || ''}`, 4000);
+                            }
                         };
                         const waitTabComplete = (tabId, timeoutMs = 30000) => new Promise(resolve => {
                             let done = false;
@@ -8706,10 +8755,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                             chrome.tabs.onUpdated.addListener(onUpd);
                         });
 
-                        const catalogJob = await findCatalogJob(verifiedAddress);
-                        if (catalogJob) {
-                            jobsTab = await chrome.tabs.create({ url: catalogJob.Link, active: false, windowId: currentWindowId });
-                            addLog(`Roofr: existing job found in catalog — ${catalogJob.Customer || ''} (${catalogJob.Address}) — opened job card`);
+                        const catalogJobs = await findCatalogJob(verifiedAddress) || [];
+                        if (catalogJobs.length) {
+                            jobsTab = await chrome.tabs.create({ url: catalogJobs[0].Link, active: false, windowId: currentWindowId });
+                            reportExistingJobs(catalogJobs, 'catalog');
                         } else {
                             const roofrListUrl = 'https://app.roofr.com/dashboard/team/239329/jobs/list-view';
                             jobsTab = await chrome.tabs.create({ url: roofrListUrl, active: false, windowId: currentWindowId });
@@ -8775,9 +8824,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     }
 
                                     if (matches.size) {
-                                        const best = [...matches.values()].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0];
-                                        location.assign(`/dashboard/team/${teamId}/jobs/list-view?selectedJobId=${best.id}`);
-                                        return { action: 'opened', id: best.id, address: best.address?.formatted_address || '', count: matches.size };
+                                        const sorted = [...matches.values()].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+                                        location.assign(`/dashboard/team/${teamId}/jobs/list-view?selectedJobId=${sorted[0].id}`);
+                                        // Same shape as the roofr-search catalog rows, so the popup lists them identically.
+                                        const jobs = sorted.map(j => ({
+                                            id: j.id,
+                                            Customer: j.customer?.name || [j.customer?.first_name, j.customer?.last_name].filter(Boolean).join(' '),
+                                            Address: j.address?.formatted_address || '',
+                                            Stage: j.job_workflow_stage?.job_stage?.name || '',
+                                            'Created at': j.created_at || ''
+                                        }));
+                                        return { action: 'opened', jobs };
                                     }
                                     if (apiError) {
                                         // Can't prove the job is new — don't risk a duplicate. Put the search in Roofr's box for the rep.
@@ -8861,12 +8918,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 }
                             })).then(res => {
                                 const r = res?.[0]?.result || {};
-                                if (r.action === 'opened') addLog(`Roofr: existing job found live (#${r.id}, ${r.address}) — opened job card`);
-                                else if (r.action === 'prefilled') addLog(`Roofr: no existing job — New Job ready with "${r.picked}" selected${r.unit ? ` (Job name: ${r.unit})` : ''}${r.ready ? '' : ' — Continue not enabled yet'}`);
-                                else if (r.action === 'prefilled_needs_pick') addLog(`Roofr: no existing job — New Job open, no confident suggestion match (top: "${r.top}"); rep picks`, 'WARN');
-                                else if (r.action === 'prefilled_no_suggestions') addLog('Roofr: no existing job — New Job open but Google returned no suggestions', 'WARN');
-                                else if (r.action === 'api_error') addLog(`Roofr: live check failed (${r.error}) — search put in Roofr's box instead of creating a job`, 'WARN');
-                                else addLog(`Roofr: ${r.error || 'job lookup did not finish'}`, 'ERROR');
+                                if (r.action === 'opened' && r.jobs?.length) {
+                                    reportExistingJobs(r.jobs.map(j => ({ ...j, Link: `${ROOFR_JOB_CARD_URL_BASE}${j.id}` })), 'live');
+                                } else if (r.action === 'prefilled') {
+                                    addLog(`Roofr: no existing job — New Job ready with "${r.picked}" selected${r.unit ? ` (Job name: ${r.unit})` : ''}${r.ready ? '' : ' — Continue not enabled yet'}`);
+                                    showToast(r.ready ? 'New job — address is set in Roofr, just click Continue' : 'New job — address is set in Roofr, check it before Continue', 6000);
+                                } else if (r.action === 'prefilled_needs_pick') {
+                                    addLog(`Roofr: no existing job — New Job open, no confident suggestion match (top: "${r.top}"); rep picks`, 'WARN');
+                                    showToast('New job — pick the address from the Roofr dropdown (no exact match)', 6000);
+                                } else if (r.action === 'prefilled_no_suggestions') {
+                                    addLog('Roofr: no existing job — New Job open but Google returned no suggestions', 'WARN');
+                                    showToast('New job — Google had no match; use "Enter address manually" in Roofr', 6000);
+                                } else if (r.action === 'api_error') {
+                                    addLog(`Roofr: live check failed (${r.error}) — search put in Roofr's box instead of creating a job`, 'WARN');
+                                    showToast("Couldn't check Roofr — search is in Roofr's box; confirm before creating a job", 6000);
+                                } else {
+                                    addLog(`Roofr: ${r.error || 'job lookup did not finish'}`, 'ERROR');
+                                    showToast('Roofr lookup did not finish — check the Roofr tab', 5000);
+                                }
                             }).catch(err => addLog(`Roofr lookup error: ${err.message}`, 'ERROR'));
                         }
                         } // end search_roofr check
@@ -8970,6 +9039,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // runs there's nothing left to pick from it, so leaving it open
                 // just shows an empty white panel until the user clicks away.
                 if (verifiedAddressesList) verifiedAddressesList.classList.add('hidden');
+                _goFlowRunning = false;
+                // Several Roofr jobs matched during this Go — show them now that the dropdown is free.
+                if (_pendingJobsAtAddress) {
+                    const p = _pendingJobsAtAddress;
+                    _pendingJobsAtAddress = null;
+                    showJobsAtAddress(p.jobs, p.openedJob);
+                }
             }
         };
 
@@ -11143,6 +11219,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         return !!tab?.url?.includes('app.roofr.com') && !tab.discarded && !tab.frozen && tab.status !== 'unloaded';
     }
 
+    let reportsV2OpeningTab = null;
+    async function reportsV2OpenRoofrTab() {
+        const create = { url: 'https://app.roofr.com/dashboard', active: false };
+        if (window.__targetWindowId) create.windowId = window.__targetWindowId;
+        let tab = await chrome.tabs.create(create);
+        const deadline = Date.now() + 30000;
+        while (tab.status !== 'complete' && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            tab = await chrome.tabs.get(tab.id);
+        }
+        if (/\/(login|sign-in|auth)/i.test(tab.url || '')) {
+            chrome.tabs.update(tab.id, { active: true }).catch(() => {});
+            throw new Error('Roofr is logged out — log in on the tab that just opened, then try again');
+        }
+        return tab;
+    }
+
     async function reportsV2GetRoofrTab() {
         if (window.__targetRoofrTabId) {
             try {
@@ -11154,7 +11247,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const query = { url: '*://app.roofr.com/*' };
         if (window.__targetWindowId) query.windowId = window.__targetWindowId;
         const tabs = await chrome.tabs.query(query);
-        if (!tabs.length) throw new Error('Open a Roofr tab first');
+        if (!tabs.length) {
+            // API calls ride the Roofr session (cookie + XSRF) inside a tab, so one
+            // must exist — open it in the background instead of making the rep do it.
+            // Shared promise: parallel loads on a cold start must not open several tabs.
+            const tab = await (reportsV2OpeningTab ||= reportsV2OpenRoofrTab().finally(() => { reportsV2OpeningTab = null; }));
+            window.__targetRoofrTabId = tab.id;
+            return tab;
+        }
         const awake = tabs.filter(reportsV2TabAwake);
         // Last resort is still a sleeping tab — reload it so a renderer exists to
         // answer. Better a one-second wake than a permanent silent hang.
@@ -11679,7 +11779,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // no measurement, measurementQueues/reports non-empty means a report is already
     // in flight or delivered, everything else needs one. The order run then drives
     // the Roofr tab to each needing job's "Confirm roof location" step and STOPS —
-    // pin verification and the purchase click stay with the human, always.
+    // pin verification + Confirm stay with the human; content.js finishes the order
+    // (All → Next → Order report → Done) only after that trusted Confirm click.
     const REPORTS_V2_PIN_FLAG = /\b(lot|unit|space|spc|apt|trlr)\b|#\s*\d/i;
     // Complex keywords in the job Details (intake note's Subdivision line etc.)
     // flag the job even when nobody typed a unit anywhere. Added 2026-09-03 after
@@ -11846,7 +11947,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         const statusLabels = {
             opening: 'opening…',
-            ready: '✅ ready — verify pin & order',
+            ready: '✅ ready — verify pin & click Confirm (rest is automatic)',
             manual: 'order manually',
             ordered: 'ordered ✓',
             done: 'done',

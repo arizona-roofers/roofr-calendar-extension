@@ -6817,7 +6817,85 @@ if (window.__isRoofrJobPage && !window.__roofrJobAutomationLoaded) {
       return r.show_addr_banner === true;
     } catch (_) { return false; }
   }
+  // After the rep verifies the pin and clicks Confirm THEMSELVES, finish the
+  // order: All → Next → Order report → wait → Done (Travis, 2026-09-28). Armed
+  // only by the Reports order run and only fired by a trusted (human) Confirm
+  // click, so a pin nobody looked at is never ordered. Any unexpected screen →
+  // stop and leave it for the human rather than guess at a paid button.
+  const ORDER_ARM_KEY = '__roofrReportOrderArmedAt';
+  const ORDER_ARM_TTL_MS = 30 * 60 * 1000;
+  let orderFinishing = false;
+  function orderArmed() {
+    try { return Date.now() - Number(sessionStorage.getItem(ORDER_ARM_KEY) || 0) < ORDER_ARM_TTL_MS; }
+    catch (_) { return false; }
+  }
+  function setOrderArmed(on) {
+    try { on ? sessionStorage.setItem(ORDER_ARM_KEY, String(Date.now())) : sessionStorage.removeItem(ORDER_ARM_KEY); }
+    catch (_) {}
+  }
+  // Whole document, not "the last [role=dialog]": Roofr's Osano cookie banner is
+  // a dialog too and hid every flow button in the first live test (2026-09-28).
+  function findButton(label) {
+    return [...document.querySelectorAll('button')].reverse().find(b =>
+      (b.textContent || '').trim() === label && !b.disabled && b.getAttribute('aria-disabled') !== 'true'
+      && b.offsetParent !== null && !b.closest('.osano-cm-window')
+    ) || null;
+  }
+  async function waitButton(label, ms) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      const b = findButton(label);
+      if (b) return b;
+      await sleep(250);
+    }
+    return null;
+  }
+  function orderToast(text, bad) {
+    const id = '__roofr_order_toast';
+    document.getElementById(id)?.remove();
+    const el = document.createElement('div');
+    el.id = id;
+    el.textContent = text;
+    el.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2147483647;background:${bad ? '#b91c1c' : '#111827'};color:#fff;font:600 13px system-ui,sans-serif;padding:10px 16px;border-radius:20px;box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:80vw;text-align:center;`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), bad ? 10000 : 5000);
+  }
+  async function finishReportOrder() {
+    orderFinishing = true;
+    setOrderArmed(false); // one order per arming — never re-fire on a later Confirm
+    try {
+      // "All" secondary structures is optional — some properties skip that step.
+      // Next may stay disabled until a structure choice is made, so wait for
+      // whichever of All / Next shows up first.
+      const end = Date.now() + 15000;
+      while (Date.now() < end && !findButton('All') && !findButton('Next')) await sleep(250);
+      const all = findButton('All');
+      if (all) { all.click(); await sleep(400); }
+      const next = await waitButton('Next', 5000);
+      if (!next) throw new Error('Next button never appeared');
+      next.click();
+      const order = await waitButton('Order report', 15000);
+      if (!order) throw new Error('Order report button never appeared');
+      order.click();
+      const done = await waitButton('Done', 90000);
+      if (!done) throw new Error('order sent, but Done never appeared — check the page');
+      done.click();
+      orderToast('Report ordered ✓');
+    } catch (err) {
+      orderToast(`Auto-order stopped: ${err.message}. Finish this one by hand.`, true);
+    } finally {
+      orderFinishing = false;
+    }
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.isTrusted || orderFinishing || !orderArmed()) return;
+    const btn = e.target.closest?.('button');
+    if (!btn || (btn.textContent || '').trim() !== 'Confirm') return;
+    setTimeout(finishReportOrder, 0); // let Roofr handle its own Confirm first
+  }, true);
+
   window.__roofrPrepReportOrder = async function prepReportOrder(address, jobTitle) {
+    setOrderArmed(true);
     if (await addressBannerEnabled()) showAddressVerifyBanner(address, jobTitle);
     else document.getElementById('__roofr_addr_verify_banner')?.remove();
     const steps = [];

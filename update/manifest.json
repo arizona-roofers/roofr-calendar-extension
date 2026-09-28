@@ -1,11 +1,12 @@
 {
-  "version": "3.2.71",
+  "version": "3.2.72",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T16:30:56.942Z",
+  "release_date": "2026-09-28T17:30:05.445Z",
   "changelog": [
-    "Address search → Roofr: opens the existing job card directly (catalog, then a live Roofr check) — no more clunky search tab",
-    "New address → New Job opens with the address already SELECTED from the dropdown (and lot/unit in Job name) — just hit Continue"
+    "Reports: ordering a report — verify the pin and click Confirm; the extension clicks All → Next → Order report → Done for you",
+    "Reports: no more \"Open a Roofr tab first\" — it opens one in the background",
+    "Address search: toast says what happened; several jobs at one address are listed so you can pick another"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.71/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.71"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.72/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.72"
 }

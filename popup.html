@@ -2760,6 +2760,10 @@
       border-radius: 20px;
       font-size: 0.9rem;
       font-weight: 600;
+      /* Size to the text, not to the space right of 50% — long messages wrapped into a narrow column. */
+      width: max-content;
+      max-width: calc(100vw - 64px); /* 16px gutters + the 16px side padding */
+      text-align: center;
       z-index: 200;
       opacity: 0;
       transition: opacity 0.3s ease-in-out;
