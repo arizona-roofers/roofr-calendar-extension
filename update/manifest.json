@@ -1,10 +1,11 @@
 {
-  "version": "3.2.77",
+  "version": "3.2.78",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T19:22:59.618Z",
+  "release_date": "2026-09-28T19:25:04.679Z",
   "changelog": [
-    "Job card opens faster when you answer a call — the answer is no longer dropped as a duplicate of the ring, and the CTM softphone pickup opens it instantly even if the CTM tab isn't in view"
+    "Call job card skips jobs deleted in Roofr — it no longer opens a dead job when a caller has several",
+    "Job card opens as soon as you answer (from 3.2.77)"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.77/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.77"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.78/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.78"
 }

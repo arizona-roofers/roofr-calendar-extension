@@ -546,7 +546,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
                 // Supabase IN query: phone=in.(num1,num2,num3)
                 const inList = normalized.join(',');
-                const url = `${SUPABASE_URL}/rest/v1/jobs?phone=in.(${inList})&select=job_id,customer,address,phone&order=created_at.desc`;
+                const url = `${SUPABASE_URL}/rest/v1/jobs?phone=in.(${inList})&deleted_at=is.null&select=job_id,customer,address,phone&order=created_at.desc`;
 
                 const resp = await fetch(url, {
                     headers: {
@@ -948,7 +948,7 @@ async function lookupJobByPhoneSupabase(phoneNumber) {
         };
 
         // Query Supabase jobs table — exact match first
-        const url = `${SUPABASE_URL}/rest/v1/jobs?phone=eq.${searchPhone}&select=job_id,customer,address,stage,status,value&limit=10&order=created_at.desc`;
+        const url = `${SUPABASE_URL}/rest/v1/jobs?phone=eq.${searchPhone}&deleted_at=is.null&select=job_id,customer,address,stage,status,value&limit=10&order=created_at.desc`;
         const resp = await fetch(url, { headers });
 
         let matchedJobs = [];
@@ -964,7 +964,7 @@ async function lookupJobByPhoneSupabase(phoneNumber) {
 
         // If no exact match, try partial match (phone stored with formatting)
         if (matchedJobs.length === 0) {
-            const likeUrl = `${SUPABASE_URL}/rest/v1/jobs?phone=like.*${searchPhone}*&select=job_id,customer,address,stage,status,value&limit=10&order=created_at.desc`;
+            const likeUrl = `${SUPABASE_URL}/rest/v1/jobs?phone=like.*${searchPhone}*&deleted_at=is.null&select=job_id,customer,address,stage,status,value&limit=10&order=created_at.desc`;
             const likeResp = await fetch(likeUrl, { headers });
 
             if (likeResp.ok) {
