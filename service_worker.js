@@ -799,6 +799,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // Track which phone numbers have already been opened (prevents duplicate opens)
 const openedCtmCallPhones = new Set();   // CTM tracking
 
+// One auto-opened job card per answered call. Two paths can report the same
+// pickup (the softphone's instant ctm:start and the call-list DOM watcher a
+// few seconds later) — whichever lands first claims it for 3 minutes.
+const jobCardOpenClaims = new Map();   // 10-digit phone -> timestamp
+function claimJobCardOpen(phoneNumber) {
+    const key = String(phoneNumber || '').replace(/\D/g, '').slice(-10);
+    if (!key) return false;
+    const now = Date.now();
+    const last = jobCardOpenClaims.get(key);
+    if (last && now - last < 3 * 60 * 1000) return false;
+    jobCardOpenClaims.set(key, now);
+    return true;
+}
+
+// Softphone fast path: ctm:incomingCall carries the caller; ctm:start means
+// THIS rep picked it up (the embed is their own phone). Remember the ringing
+// number so the pickup can open the job card immediately instead of waiting
+// for the call-list DOM to repaint.
+let _softphoneRing = null;   // { phone, name, windowId, at }
+function extractCallerFromCtmDetail(detail) {
+    if (!detail || typeof detail !== 'object') return null;
+    const PHONE_KEYS = /^(caller_?number|callerNumber|caller_?phone|from|from_?number|customer_?number|contact_?number|phone_?number|caller)$/i;
+    const NAME_KEYS = /^(caller_?name|callerName|name|cnam|contact_?name)$/i;
+    let phone = null, name = null;
+    const walk = (o, depth) => {
+        if (!o || typeof o !== 'object' || depth > 4 || phone) return;
+        for (const [k, v] of Object.entries(o)) {
+            if (typeof v === 'string' || typeof v === 'number') {
+                const digits = String(v).replace(/\D/g, '');
+                if (!phone && PHONE_KEYS.test(k) && (digits.length === 10 || (digits.length === 11 && digits[0] === '1'))) phone = digits.slice(-10);
+                if (!name && NAME_KEYS.test(k) && typeof v === 'string' && /[a-z]/i.test(v)) name = v.trim();
+            } else if (typeof v === 'object') walk(v, depth + 1);
+        }
+    };
+    walk(detail, 0);
+    return phone ? { phone, name } : null;
+}
+
 // Clear opened calls tracking after 30 minutes (in case of long sessions)
 setInterval(() => {
     openedCtmCallPhones.clear();
@@ -1019,7 +1057,7 @@ async function handleCtmIncomingCall(phoneNumber, formattedPhone, skipEnabledChe
         // Auto-open job card when call is answered by the rep — INBOUND only:
         // on an outbound call the rep chose who to dial and is usually already
         // on the job card; popping another tab mid-call is disruptive.
-        if (isAnswered && !isOutbound) {
+        if (isAnswered && !isOutbound && claimJobCardOpen(phoneNumber)) {
             try {
                 const autoSearchSetting = await chrome.storage.sync.get({ ctm_auto_search: true });
                 if (autoSearchSetting.ctm_auto_search) {
@@ -1105,7 +1143,7 @@ async function handleCtmIncomingCall(phoneNumber, formattedPhone, skipEnabledChe
 
         // Auto-open job card when call is answered and phone is in Supabase —
         // INBOUND only (see comment on the alreadyOpened path above).
-        if (isAnswered && !isOutbound) {
+        if (isAnswered && !isOutbound && claimJobCardOpen(phoneNumber)) {
             try {
                 const autoSearchSetting = await chrome.storage.sync.get({ ctm_auto_search: true });
                 if (autoSearchSetting.ctm_auto_search) {
@@ -1940,6 +1978,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 console.log('[BacktickAnswer] ring hint opened (ctm:incomingCall) tab', sender?.tab?.id);
             } else if (ev === 'ctm:start' || ev === 'ctm:answered' || ev === 'ctm:failed' || ev === 'ctm:end-activity') {
                 _backtickRing.active = false;
+            }
+            // Job card fast path (see _softphoneRing). connecting = outbound
+            // dial, so it can never be a pickup of the remembered ring.
+            if (ev === 'ctm:incomingCall') {
+                const who = extractCallerFromCtmDetail(msg.payload.detail);
+                _softphoneRing = who ? { ...who, windowId: sender?.tab?.windowId ?? null, at: Date.now() } : null;
+                if (!who) console.log('[JobCardFast] incomingCall had no caller number:', JSON.stringify(msg.payload.detail || {}).slice(0, 400));
+            } else if (ev === 'ctm:start' && _softphoneRing && Date.now() - _softphoneRing.at < 90000) {
+                const r = _softphoneRing;
+                _softphoneRing = null;
+                console.log('[JobCardFast] pickup of', r.phone, '— opening job card now');
+                handleCtmIncomingCall(r.phone, r.phone, false, r.name, r.windowId, null, true, false)
+                    .catch(e => console.warn('[JobCardFast] open failed:', e));
+            } else if (ev === 'ctm:connecting' || ev === 'ctm:end-activity' || ev === 'ctm:failed') {
+                _softphoneRing = null;
             }
             if (ev === 'ctm:connecting' || ev === 'ctm:start') {
                 meetAutoMute();

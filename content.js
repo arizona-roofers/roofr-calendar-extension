@@ -880,8 +880,12 @@ if (window.location.hostname.includes('calltrackingmetrics.com') && !window.__ct
 
     // ROBUST DEDUPLICATION: Prevent duplicate popups during transfers/agent changes
     // This check applies regardless of isNewCall flag
+    // Keyed by phone + ring/answered state: the RING pass used to claim the
+    // 60s window, so the ANSWER a few seconds later was dropped as a
+    // "duplicate" and the job card waited for a later recheck.
     const now = Date.now();
-    const lastPopupTime = recentCtmPopupPhones.get(phoneNumber);
+    const dedupKey = phoneNumber + (isAnswered ? '|answered' : '|ringing');
+    const lastPopupTime = recentCtmPopupPhones.get(dedupKey);
     if (lastPopupTime && (now - lastPopupTime) < CTM_POPUP_DEDUP_WINDOW_MS) {
       console.log(`[CTM Extension] Skipping duplicate popup for ${phoneNumber} - last popup was ${Math.round((now - lastPopupTime) / 1000)}s ago (within ${CTM_POPUP_DEDUP_WINDOW_MS / 1000}s window)`);
       return;
@@ -904,7 +908,7 @@ if (window.location.hostname.includes('calltrackingmetrics.com') && !window.__ct
     });
 
     // Track this popup to prevent duplicates
-    recentCtmPopupPhones.set(phoneNumber, now);
+    recentCtmPopupPhones.set(dedupKey, now);
     lastCtmSearchedNumber = phoneNumber;
 
     // Check if auto-search is enabled before sending message
@@ -935,7 +939,8 @@ if (window.location.hostname.includes('calltrackingmetrics.com') && !window.__ct
     console.log('[CTM Extension] Call ended:', phoneNumber);
 
     // Clear deduplication tracking so future calls from this number will popup
-    recentCtmPopupPhones.delete(phoneNumber);
+    recentCtmPopupPhones.delete(phoneNumber + '|ringing');
+    recentCtmPopupPhones.delete(phoneNumber + '|answered');
 
     if (phoneNumber === lastCtmSearchedNumber) {
       lastCtmSearchedNumber = null;

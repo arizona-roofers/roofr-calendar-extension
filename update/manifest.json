@@ -1,10 +1,10 @@
 {
-  "version": "3.2.76",
+  "version": "3.2.77",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-28T19:13:02.930Z",
+  "release_date": "2026-09-28T19:22:59.618Z",
   "changelog": [
-    "Address search picks the region from the territory map (service-area editor) — Cottonwood, Prescott, Sedona, Payson addresses now open North (Wednesday up-north slots)"
+    "Job card opens faster when you answer a call — the answer is no longer dropped as a duplicate of the ring, and the CTM softphone pickup opens it instantly even if the CTM tab isn't in view"
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.76/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.76"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.2.77/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.2.77"
 }
