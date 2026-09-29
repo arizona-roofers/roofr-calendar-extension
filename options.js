@@ -158,7 +158,7 @@ const defaults = {
   // Interface - Tab visibility
   show_dialer: true,
   show_people: true,
-  show_clipboard: true,
+  show_clipboard: false, // off by default (Travis 2026-09-29)
   show_reports: false, // Hidden by default
   // Interface - Navigation
   show_dock_note: true,

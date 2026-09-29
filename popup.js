@@ -1224,9 +1224,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         scanView: 'weekly',    // agenda | weekly | daily — calendar view used when scanning
         showDialerTab: true,
         showPeopleTab: true,
-        showClipboardTab: true,
+        showClipboardTab: false,  // off by default (Travis 2026-09-29)
         showReportsTab: false, // Hidden by default
-        showMetricsTab: true,  // CSR bookings + calls ranking (2026-09-03)
+        showMetricsTab: false, // CSR bookings + calls ranking (2026-09-03); off by default (Travis 2026-09-29)
         showAddrBanner: false, // blue address-verify bar the Reports chauffeur pins to the Roofr page (off by default 2026-09-03)
         showTodoStrip: false,  // Queue-shortcut chips at the top of the panel (off by default 2026-09-14)
         showQuickNotes: true,
@@ -10467,6 +10467,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const reportsTabBtn = document.querySelector('.nav-tab[data-target="sec-reports"]');
                     if (reportsTabBtn) reportsTabBtn.style.display = 'none';
                     console.log('[Popup] Migrated tab visibility v6: Reports tab hidden by default');
+                });
+            }
+        });
+
+        // One-time migration: Clipboard and Metrics tabs off by default (Travis 2026-09-29). Options saves every
+        // field on any change, so most installs have show_clipboard:true stored and a new default alone would hide
+        // them for nobody. Runs once; turning either back on (Options / panel Settings) sticks after that.
+        chrome.storage.local.get('clip_metrics_default_off_v1', (result) => {
+            if (!result.clip_metrics_default_off_v1) {
+                chrome.storage.sync.set({ show_clipboard: false, show_metrics: false }, () => {
+                    chrome.storage.local.set({ clip_metrics_default_off_v1: true });
+                    userPrefs.showClipboardTab = false;
+                    userPrefs.showMetricsTab = false;
+                    saveUserPrefs();
+                    if (settingShowClipboard) settingShowClipboard.checked = false;
+                    if (settingShowMetrics) settingShowMetrics.checked = false;
+                    for (const t of ['sec-clipboard', 'sec-metrics']) {
+                        const btn = document.querySelector(`.nav-tab[data-target="${t}"]`);
+                        if (btn) { btn.style.display = 'none'; if (btn.classList.contains('active')) activateMainTab('sec-scanner'); }
+                    }
+                    console.log('[Popup] Migrated: Clipboard + Metrics tabs hidden by default');
                 });
             }
         });
