@@ -202,7 +202,7 @@ const defaults = {
   normalize_addresses: true,
   // Address search actions
   search_google_earth: true,
-  search_gemini: true,
+  search_gemini: false,
   search_roofr: true,
 
   // Phone search

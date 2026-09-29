@@ -5696,7 +5696,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 AVAIL_RANGE_NORTH: "I18:Q25",
                 AVAIL_RANGE_SOUTH: "I10:Q17",
                 search_google_earth: true,
-                search_gemini: true,
+                search_gemini: false,
                 search_roofr: true,
                 ROUTING_API_URL: '', // e.g., "https://your-api.vercel.app/api/v1"
                 ROUTING_API_KEY: '',
@@ -10474,6 +10474,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         // One-time migration: Clipboard and Metrics tabs off by default (Travis 2026-09-29). Options saves every
         // field on any change, so most installs have show_clipboard:true stored and a new default alone would hide
         // them for nobody. Runs once; turning either back on (Options / panel Settings) sticks after that.
+        // The Gemini Gem tab on Go: off by default (Travis 2026-09-29, "dont delete it but turn it off by default").
+        // Same reason as below: most installs have search_gemini:true stored, so it takes a one-time switch.
+        chrome.storage.local.get('gemini_default_off_v1', (result) => {
+            if (!result.gemini_default_off_v1) {
+                chrome.storage.sync.set({ search_gemini: false }, () => {
+                    chrome.storage.local.set({ gemini_default_off_v1: true });
+                    console.log('[Popup] Migrated: Gemini Gem tab on Go off by default');
+                });
+            }
+        });
         chrome.storage.local.get('clip_metrics_default_off_v1', (result) => {
             if (!result.clip_metrics_default_off_v1) {
                 chrome.storage.sync.set({ show_clipboard: false, show_metrics: false }, () => {
@@ -10934,7 +10944,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 AVAIL_RANGE_NORTH: "I18:Q25",
                 AVAIL_RANGE_SOUTH: "I10:Q17",
                 search_google_earth: true,
-                search_gemini: true,
+                search_gemini: false,
                 search_roofr: true,
                 ROUTING_API_URL: '', // e.g., "https://your-api.vercel.app/api/v1"
                 ROUTING_API_KEY: '',

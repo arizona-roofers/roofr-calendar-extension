@@ -73,7 +73,7 @@ const SEED_DEFAULTS = {
     normalize_addresses: true,
     // Address search actions (Go button)
     search_google_earth: true,
-    search_gemini: true,
+    search_gemini: false,   // off by default 2026-09-29: Call Coach writes the AI note; Options turns it back on
     search_roofr: true,
 
     // =====================
