@@ -179,7 +179,8 @@ const CTM_CHECK_INTERVAL_MINUTES = 10;
 // ========================================
 // AUTO-UPDATE CONFIGURATION
 // ========================================
-const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/atravisjones/roofr-calendar-extension/main/update/manifest.json";
+// Served from the public releases repo (this repo is private). See scripts/publish-releases.sh.
+const UPDATE_CHECK_URL = "https://arizona-roofers.github.io/roofr-assist-releases/update/manifest.json";
 const UPDATE_CHECK_ALARM = "update_check_alarm";
 const UPDATE_CHECK_INTERVAL_HOURS = 12;
 const LAST_UPDATE_CHECK_KEY = "last_update_check";

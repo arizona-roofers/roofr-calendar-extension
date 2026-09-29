@@ -46,7 +46,25 @@ npm run ship -- major   # 2.1.2 -> 3.0.0   (use when permissions change)
 Check the Actions log. The build self-aborts (instead of shipping something broken) if the signed ID doesn't match `fkldnf` or the signing secret is missing.
 
 
-## 2026-09-14: repo lives in the `arizona-roofers` org and MUST stay PUBLIC
+## 2026-09-29: releases move to a public releases-only repo; this repo goes PRIVATE
+
+Supersedes the 2026-09-14 section below. Dollars and Callers (Hunter's Sales Report + Call Coach) is
+merging into this repo, and its history and test fixtures carry customer call data, so the source can't be
+public any more. Chrome still needs anonymous URLs, so CI now also publishes each signed build to
+**`arizona-roofers/roofr-assist-releases`** (public, GitHub Pages, built files only, one force-pushed commit):
+
+- Update manifest: `https://arizona-roofers.github.io/roofr-assist-releases/updates.xml` (manifest `update_url` from v3.3.0)
+- In-extension check: `https://arizona-roofers.github.io/roofr-assist-releases/update/manifest.json`
+- CRX: `https://arizona-roofers.github.io/roofr-assist-releases/crx/roofr-assist-X.Y.Z.crx` (newest 5 kept for rollback)
+
+`scripts/publish-releases.sh` does it; it needs the Actions secret `RELEASES_DEPLOY_KEY` (write deploy key on the
+releases repo). Cutover order, and why it matters: the 09-14 private flip froze every machine.
+1. Ship v3.3.0 (the bridge: new `update_url`). Old `updates.xml` here still serves it, so every machine picks it up.
+2. Admin console: change the force-install **Installation URL** to the new `updates.xml` (Update URL stays "from the extension manifest").
+3. Wait until the Admin console's extension report shows every machine on >= 3.3.0.
+4. Only then make this repo private.
+
+## 2026-09-14: repo lives in the `arizona-roofers` org and MUST stay PUBLIC (superseded 2026-09-29)
 
 Chrome fetches `updates.xml` and the `.crx` anonymously. The repo was briefly private after
 the org transfer and that silently froze every managed machine (404s). Travis chose to keep

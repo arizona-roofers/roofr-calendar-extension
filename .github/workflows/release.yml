@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
 
+# Queued tag pushes publish one at a time, oldest first, so updates.xml never goes backwards.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -63,6 +68,13 @@ jobs:
             echo "::error::Signed CRX ID ($ACTUAL) does not match the force-installed ID ($EXPECTED). Wrong signing key — aborting so we never publish an undeployable crx."
             exit 1
           fi
+
+      - name: Publish to public releases repo (GitHub Pages)
+        # Chrome's updater reads updates.xml from arizona-roofers.github.io/roofr-assist-releases, not from this
+        # repo (this repo is private). RELEASES_DEPLOY_KEY = write deploy key on arizona-roofers/roofr-assist-releases.
+        env:
+          RELEASES_DEPLOY_KEY: ${{ secrets.RELEASES_DEPLOY_KEY }}
+        run: bash scripts/publish-releases.sh "${{ steps.get_version.outputs.VERSION }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
