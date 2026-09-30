@@ -1226,7 +1226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showPeopleTab: true,
         showClipboardTab: false,  // off by default (Travis 2026-09-29)
         showReportsTab: false, // Hidden by default
-        showMetricsTab: false, // CSR bookings + calls ranking (2026-09-03); off by default (Travis 2026-09-29)
+        showMetricsTab: true,  // CSR bookings + calls ranking (2026-09-03); back on by default (Travis 2026-09-30)
         showAddrBanner: false, // blue address-verify bar the Reports chauffeur pins to the Roofr page (off by default 2026-09-03)
         showTodoStrip: false,  // Queue-shortcut chips at the top of the panel (off by default 2026-09-14)
         showQuickNotes: true,
@@ -10484,20 +10484,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
         });
+        // (Since 9/30 it hides Clipboard only: Metrics came back, see metrics_back_on_v1 below.)
         chrome.storage.local.get('clip_metrics_default_off_v1', (result) => {
             if (!result.clip_metrics_default_off_v1) {
-                chrome.storage.sync.set({ show_clipboard: false, show_metrics: false }, () => {
+                chrome.storage.sync.set({ show_clipboard: false }, () => {
                     chrome.storage.local.set({ clip_metrics_default_off_v1: true });
                     userPrefs.showClipboardTab = false;
-                    userPrefs.showMetricsTab = false;
                     saveUserPrefs();
                     if (settingShowClipboard) settingShowClipboard.checked = false;
-                    if (settingShowMetrics) settingShowMetrics.checked = false;
-                    for (const t of ['sec-clipboard', 'sec-metrics']) {
-                        const btn = document.querySelector(`.nav-tab[data-target="${t}"]`);
-                        if (btn) { btn.style.display = 'none'; if (btn.classList.contains('active')) activateMainTab('sec-scanner'); }
-                    }
-                    console.log('[Popup] Migrated: Clipboard + Metrics tabs hidden by default');
+                    const btn = document.querySelector('.nav-tab[data-target="sec-clipboard"]');
+                    if (btn) { btn.style.display = 'none'; if (btn.classList.contains('active')) activateMainTab('sec-scanner'); }
+                    console.log('[Popup] Migrated: Clipboard tab hidden by default');
+                });
+            }
+        });
+        // One-time migration: the Metrics tab back on for every CSR (Travis 2026-09-30: "can we bring back the metrics for
+        // the csrs?"). v3.3.1's migration above hid it everywhere; this shows it once, and turning it off afterwards sticks.
+        chrome.storage.local.get('metrics_back_on_v1', (result) => {
+            if (!result.metrics_back_on_v1) {
+                chrome.storage.sync.set({ show_metrics: true }, () => {
+                    chrome.storage.local.set({ metrics_back_on_v1: true });
+                    userPrefs.showMetricsTab = true;
+                    saveUserPrefs();
+                    if (settingShowMetrics) settingShowMetrics.checked = true;
+                    const btn = document.querySelector('.nav-tab[data-target="sec-metrics"]');
+                    if (btn) btn.style.display = '';
+                    console.log('[Popup] Migrated: Metrics tab back on');
                 });
             }
         });

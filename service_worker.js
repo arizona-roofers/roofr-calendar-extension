@@ -31,7 +31,7 @@ const SEED_DEFAULTS = {
     show_job_sorting: false,
     show_people: true,
     show_clipboard: false, // off by default (Travis 2026-09-29); matches options.js
-    show_metrics: false,   // off by default (Travis 2026-09-29)
+    show_metrics: true,    // back on by default (Travis 2026-09-30; was off 9/29)
     show_reports: false,   // Hidden by default
     // Interface behavior
     show_dock_note: true,
