@@ -202,7 +202,7 @@ const defaults = {
   normalize_addresses: true,
   // Address search actions
   search_google_earth: true,
-  search_gemini: false,
+  search_gemini: true,   // back on until every CSR has AI notes set up (Travis 2026-09-30)
   search_roofr: true,
 
   // Phone search
