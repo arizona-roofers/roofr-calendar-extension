@@ -911,6 +911,7 @@
     let skippedResolvedDupe = 0;
     let skippedDupePhone = 0;
     let forcedFresh = 0;
+    let forcedMissed = 0;
 
     // Same-day duplicate guard. A sync race can land the SAME lead on two rows
     // with an identical receipt date. When a rep dispositions one copy
@@ -1027,12 +1028,19 @@
       // sort first, this makes them the first thing every rep sees no matter
       // what is ticked; once a lead reaches 1 attempt the filter applies to it
       // again, so "filter by source" is only ever a choice among worked leads.
+      // Missed calls get the same override at ANY attempt count. Travis
+      // 2026-09-29: the dialer must reach back out to every missed call
+      // before working anything else, so a rep's filter can't hide one.
       const neverCalled = attempts === 0;
-      if (neverCalled) {
+      const missedCall = isMissedCallLead(l);
+      if (neverCalled || missedCall) {
         const src = (l.source || "").trim();
         const hiddenBySource = filterSources.size > 0 && !filterSources.has(src);
         const hiddenByAttempts = attempts < attemptRange[0] || attempts > attemptRange[1];
-        if (hiddenBySource || hiddenByAttempts) forcedFresh++;
+        if (hiddenBySource || hiddenByAttempts) {
+          if (missedCall) forcedMissed++;
+          else forcedFresh++;
+        }
       } else {
         // Source filter — skip if source doesn't match active filters
         if (filterSources.size > 0) {
@@ -1111,6 +1119,7 @@
       if (skippedResolvedDupe > 0) parts.push(`${skippedResolvedDupe} duplicate of a lead resolved today`);
       if (skippedDupePhone > 0) parts.push(`${skippedDupePhone} duplicate row for a number already queued`);
       if (forcedFresh > 0) parts.push(`${forcedFresh} never-called lead${forcedFresh > 1 ? "s" : ""} override your filters`);
+      if (forcedMissed > 0) parts.push(`${forcedMissed} missed call${forcedMissed > 1 ? "s" : ""} override your filters`);
       if (parts.length > 0) log(parts.join(", "), "info", "queue");
     }
     updateFilterStats(skippedSource, skippedAttempts, skipped3hr, forcedFresh);
@@ -1131,7 +1140,12 @@
       const aTest = /\btest\b/i.test(a.name || "");
       const bTest = /\btest\b/i.test(b.name || "");
       if (aTest !== bTest) return aTest ? -1 : 1;
-      // Never-dialed leads (0 attempts) ALWAYS go first — Travis 2026-09-16:
+      // Missed calls go ahead of everything else (Travis 2026-09-29): every
+      // due "Missed Call" row is served before any other lead, fresh or not.
+      const aMissed = isMissedCallLead(a);
+      const bMissed = isMissedCallLead(b);
+      if (aMissed !== bMissed) return aMissed ? -1 : 1;
+      // Never-dialed leads (0 attempts) go next — Travis 2026-09-16:
       // a 3-attempt lead near the bottom of the sheet was being served before
       // fresh leads higher up. Within each group keep the existing order.
       const aFresh = (parseInt(a.attemptCount) || 0) === 0;
@@ -1143,6 +1157,11 @@
       return bRow - aRow;
     });
     return out.filter(l => !l._skip).concat(out.filter(l => l._skip));
+  }
+
+  // Sheet rows queued by the missed-call watchdog carry source "Missed Call".
+  function isMissedCallLead(l) {
+    return (l.source || "").trim().toLowerCase() === "missed call";
   }
 
   // Extract the leading date part of a sheet date string, normalized to
