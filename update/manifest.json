@@ -1,10 +1,11 @@
 {
-  "version": "3.3.0",
+  "version": "3.3.1",
   "minimum_chrome_version": "116",
-  "release_date": "2026-09-29T16:50:59.050Z",
+  "release_date": "2026-09-30T01:00:57.906Z",
   "changelog": [
-    "Behind the scenes: updates now come from a new release host (arizona-roofers.github.io/roofr-assist-releases). Nothing changes for you."
+    "Dialer: missed calls are now called back first, ahead of every other lead, even if your filters would hide them. Your filters still apply to everything after that.",
+    "Clipboard, Metrics and Gemini Gem tabs are off by default (turn them back on in Options)."
   ],
-  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.3.0/roofr-calendar-scraper.crx",
-  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.3.0"
+  "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.3.1/roofr-calendar-scraper.crx",
+  "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.3.1"
 }
