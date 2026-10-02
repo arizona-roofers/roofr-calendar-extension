@@ -3164,6 +3164,9 @@
       if (!parentBody) return;
       const isDark = parentBody.classList.contains("dark-theme");
       document.body.classList.toggle("dark-theme", isDark);
+      // Named theme too (Halloween re-colors the dialer on top of dark-theme)
+      const parentTheme = window.parent.document.documentElement.dataset.theme || "";
+      if (document.documentElement.dataset.theme !== parentTheme) document.documentElement.dataset.theme = parentTheme;
     } catch (_) { /* cross-origin or standalone — ignore */ }
   }
 

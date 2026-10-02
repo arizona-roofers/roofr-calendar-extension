@@ -63,7 +63,8 @@
         "https://*.roofr.com/*"
       ],
       "js": [
-        "roofr-dark-mode.js"
+        "roofr-dark-mode.js",
+        "roofr-halloween.js"
       ],
       "run_at": "document_start"
     },
@@ -136,6 +137,14 @@
       "resources": [
         "attachment-viewer.html",
         "attachment-viewer.js"
+      ],
+      "matches": [
+        "https://*.roofr.com/*"
+      ]
+    },
+    {
+      "resources": [
+        "fonts/creepster.woff2"
       ],
       "matches": [
         "https://*.roofr.com/*"

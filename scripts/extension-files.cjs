@@ -14,6 +14,7 @@ module.exports = {
     'reports-batch.js',
     'content.js',
     'roofr-dark-mode.js',
+    'roofr-halloween.js',
     'roofr-timeline.js',
     'roofr-timeline.css',
     'roofr-material-order-newtab.js',
@@ -33,6 +34,6 @@ module.exports = {
     'attachment-viewer.html',
     'attachment-viewer.js'
   ],
-  // Directories whose entire contents ship with the extension (e.g. icons/).
-  extensionDirs: ['icons']
+  // Directories whose entire contents ship with the extension (e.g. icons/, fonts/).
+  extensionDirs: ['icons', 'fonts']
 };

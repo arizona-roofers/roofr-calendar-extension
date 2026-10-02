@@ -1,7 +1,7 @@
 // options.js
 // Comprehensive settings storage with categorized toggles.
 import { CONFIG, PEOPLE_DATA, syncPeopleDataFromRoster } from './config.js';
-import { THEMES } from './themes.js';
+import { THEMES, isDarkTheme } from './themes.js';
 
 // All settings fields organized by category
 const fields = [
@@ -20,6 +20,7 @@ const fields = [
 
   // Appearance toggles
   "compact_mode",
+  "halloween_sounds",
   "show_color_indicators",
   "show_icons",
   "animate_transitions",
@@ -149,6 +150,7 @@ const defaults = {
 
   // Appearance
   compact_mode: false,
+  halloween_sounds: false,
   show_color_indicators: true,
   show_icons: true,
   animate_transitions: true,
@@ -499,8 +501,8 @@ function applyThemePreview(themeName) {
   root.style.setProperty('--warning-bg', colors.warningBg);
 
   // Accent variants for gradients and highlights (theme-aware transparency)
-  const isDark = themeName === 'dark';
-  const accentRgb = isDark ? '96, 165, 250' : '59, 130, 246';
+  const isDark = isDarkTheme(themeName);
+  const accentRgb = themeName === 'halloween' ? '255, 117, 24' : isDark ? '96, 165, 250' : '59, 130, 246';
   root.style.setProperty('--accent-very-light', `rgba(${accentRgb}, ${isDark ? 0.15 : 0.05})`);
   root.style.setProperty('--accent-light', `rgba(${accentRgb}, ${isDark ? 0.25 : 0.1})`);
   root.style.setProperty('--accent-ring', `rgba(${accentRgb}, ${isDark ? 0.3 : 0.15})`);

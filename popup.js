@@ -1,7 +1,7 @@
 
 
 import { CONFIG, PEOPLE_DATA, syncPeopleDataFromRoster } from './config.js';
-import { THEMES, applyTheme } from './themes.js';
+import { THEMES, applyTheme, isDarkTheme } from './themes.js';
 import { fetchRepRoutingProfile, scoreRouteCandidates } from './routing.js';
 
 const SLOT_HOLDS_URL = 'https://roofr-search.vercel.app/api/slot-holds';
@@ -10539,7 +10539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyTheme(themeName);
 
         // For backwards compatibility, also apply dark-theme class for dark theme
-        if (themeName === 'dark') document.body.classList.add('dark-theme');
+        if (isDarkTheme(themeName)) document.body.classList.add('dark-theme');
         else document.body.classList.remove('dark-theme');
 
         if (settingTheme) settingTheme.value = themeName;
@@ -10626,7 +10626,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 userPrefs.theme = result.theme;
                 applyTheme(result.theme);
                 // Handle dark-theme class for backwards compatibility
-                if (result.theme === 'dark') document.body.classList.add('dark-theme');
+                if (isDarkTheme(result.theme)) document.body.classList.add('dark-theme');
                 else document.body.classList.remove('dark-theme');
                 if (settingTheme) settingTheme.value = result.theme;
             }
@@ -10773,7 +10773,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Apply theme immediately
         applyTheme(themeName);
-        if (themeName === 'dark') document.body.classList.add('dark-theme');
+        if (isDarkTheme(themeName)) document.body.classList.add('dark-theme');
         else document.body.classList.remove('dark-theme');
 
         // Save to both local and sync storage

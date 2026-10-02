@@ -3,8 +3,7 @@
   "minimum_chrome_version": "116",
   "release_date": "2026-09-30T23:58:40.609Z",
   "changelog": [
-    "The Metrics tab is back on for everyone (turn it off in Settings if you don't want it).",
-    "Searching an address opens the Gemini Gem tab again, until everyone has AI notes set up. You can still turn it off in Options."
+    "New Halloween theme, built by Hunter: pumpkins, bats and a haunted night sky across the panel, the dialer and Roofr itself. Pick it under Theme. Spooky sounds are off unless you turn them on in Options."
   ],
   "download_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/download/v3.3.2/roofr-calendar-scraper.crx",
   "release_notes_url": "https://github.com/atravisjones/roofr-calendar-extension/releases/tag/v3.3.2"
